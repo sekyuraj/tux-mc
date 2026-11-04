@@ -24,25 +24,6 @@ static uint32_t over(uint32_t dst, uint32_t src)
     return 0xFF000000u | (mix(dst, src, (src >> 24) / 255.0f) & 0xFFFFFF);
 }
 
-static int ell(float x, float y, float rx, float ry) { return x * x / (rx * rx) + y * y / (ry * ry) <= 1; }
-
-/* a penguin centred at (0.5, ~0.5); 0 = not on it */
-static uint32_t penguin(float u, float v, uint32_t belly, uint32_t body, uint32_t beak)
-{
-    float x = (u - 0.5f) * 10 / 16, y = v - 0.5f;
-    if (ell(x, y - 0.06f, 0.2f, 0.26f))
-        return ell(x, y - 0.1f, 0.13f, 0.19f) ? belly : body;
-    if (ell(x, y + 0.27f, 0.13f, 0.12f)) {
-        if (ell(x - 0.045f, y + 0.29f, 0.025f, 0.03f) || ell(x + 0.045f, y + 0.29f, 0.025f, 0.03f))
-            return ell(x - 0.045f, y + 0.285f, 0.011f, 0.014f) || ell(x + 0.045f, y + 0.285f, 0.011f, 0.014f) ? body
-                                                                                                                : belly;
-        return ell(x, y + 0.22f, 0.055f, 0.03f) ? beak : body;
-    }
-    if (ell(x - 0.09f, y - 0.33f, 0.08f, 0.035f) || ell(x + 0.09f, y - 0.33f, 0.08f, 0.035f))
-        return beak;
-    return 0;
-}
-
 static float hash(float u, float v, int cells)
 {
     uint64_t h = (uint64_t)(int)(u * cells * 10 / 16.0f) * 0x9E3779B97F4A7C15ull ^
@@ -77,8 +58,8 @@ static const struct {
     {"tux", 0xFF1A1A1A, 0xFF2C2C2C, 1},     {"gentoo", 0xFF625A8C, 0xFF2E2848, 0},
     {"steamos", 0xFF1B2838, 0xFF0B0F14, 0}, {"arch", 0xFF1E2229, 0xFF0B0D11, 0},
     {"debian", 0xFFF4F4F4, 0xFFD6D6D6, 0},  {"mint", 0xFF2E2E2E, 0xFF141414, 0},
-    {"freebsd", 0xFF262626, 0xFF0D0D0D, 0}, {"openbsd", 0xFFF5D547, 0xFFD9A814, 0},
-    {"lfs", 0xFF2A3F5F, 0xFF0F1A2B, 0},     {"crux", 0xFF1F3354, 0xFF0C1626, 0},
+    {"freebsd", 0xFF262626, 0xFF0D0D0D, 0}, {"openbsd", 0xFF2B4A78, 0xFF101C30, 0},
+    {"lfs", 0xFF1F3B63, 0xFF0B1424, 0},     {"crux", 0xFF1F3354, 0xFF0C1626, 0},
 };
 
 static uint32_t sample_nearest(const tuxmc_img_t *im, float u, float v)
@@ -99,15 +80,6 @@ int tuxmc_cape_logo(const char *id)
 /* u: 0..1 left->right, v: 0..1 top->bottom of the 10x16 outside face */
 static uint32_t color(const char *id, float u, float v, const tuxmc_pal_t *p, const tuxmc_img_t *img)
 {
-    if (!strcmp(id, "theme")) {
-        float bx = fminf(fminf(u, 1 - u) * 10, fminf(v, 1 - v) * 16);
-        if (bx < 0.45f)
-            return p->accent;
-        if (bx < 0.6f)
-            return p->bg;
-        uint32_t c = penguin(u, v * 1.6f - 0.25f, p->fg_bright, p->bg, p->warn);
-        return c ? c : mix(p->accent, p->selection, v);
-    }
     for (unsigned i = 0; i < sizeof LOGOS / sizeof *LOGOS; i++)
         if (!strcmp(LOGOS[i].id, id)) {
             uint32_t c = mix(LOGOS[i].top, LOGOS[i].bottom, v);
@@ -134,24 +106,6 @@ static uint32_t color(const char *id, float u, float v, const tuxmc_pal_t *p, co
         if (hash(u, v, 60) > 0.993f)
             return 0xFFBFD4FF;
         return c;
-    }
-    if (!strcmp(id, "aurora")) {
-        uint32_t c = mix(0xFF04110F, 0xFF0B1A2E, v);
-        for (int i = 0; i < 3; i++) {
-            float band = 0.25f + i * 0.22f + 0.06f * sinf(u * 9 + i * 2.1f);
-            c = mix(c, i == 1 ? 0xFF9B5DE5 : 0xFF3CF0A8, fmaxf(0, 1 - fabsf(v - band) * 14) * 0.85f);
-        }
-        return c;
-    }
-    if (!strcmp(id, "ember")) {
-        float n = 0.5f + 0.25f * sinf(u * 23 + v * 7) + 0.25f * sinf(u * 5 - v * 19);
-        float t = fmaxf(0, fminf(1, (1 - v) * 1.3f - 0.3f + n * 0.4f));
-        return mix(mix(0xFF120403, 0xFFB3260E, t), 0xFFFFC14D, fmaxf(0, t - 0.65f) * 2.6f);
-    }
-    if (!strcmp(id, "ocean")) {
-        float wave = sinf(u * 12 + sinf(v * 20) * 1.5f);
-        uint32_t c = mix(0xFF0B3C5D, 0xFF021526, v);
-        return fabsf(fmodf(v * 10 + wave * 0.12f + 10, 1.0f) - 0.5f) < 0.04f ? mix(c, 0xFF8FE3FF, 0.6f) : c;
     }
     if (!strcmp(id, "synth")) {
         float sx = (u - 0.5f) * 10 / 16, sy = v - 0.33f;
@@ -184,8 +138,8 @@ static void face(uint32_t *out, int s, const char *id, int fx, int fy, const tux
             out[(fy * s + y) * 64 * s + fx * s + x] = color(id, (x + 0.5f) / w, (y + 0.5f) / h, p, img);
 }
 
-const char *const tuxmc_cape_ids[] = {"theme",  "tux",     "gentoo", "steamos", "arch",  "debian", "mint",  "freebsd", "openbsd",
-                                      "lfs",    "crux",    "stars",  "aurora",  "ember", "ocean",  "synth", "image",   NULL};
+const char *const tuxmc_cape_ids[] = {"tux",     "gentoo", "steamos", "arch", "debian", "mint",  "freebsd",
+                                      "openbsd", "lfs",    "crux",    "stars", "synth",  "image", NULL};
 
 void tuxmc_cape(const char *id, int s, const tuxmc_pal_t *p, const tuxmc_img_t *img, uint32_t *out)
 {

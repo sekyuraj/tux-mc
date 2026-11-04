@@ -432,10 +432,9 @@ GtkWidget *mc_stage(app_t *a, mc3d_t *v, GtkDrawingAreaDrawFunc draw)
 
 /* ---- capes on the home page ---- */
 static const struct { const char *id, *name; } TUX_CAPES[] = {
-    {"theme", "Theme"},     {"tux", "Tux"},         {"gentoo", "Gentoo"},   {"steamos", "SteamOS"},
-    {"arch", "Arch"},       {"debian", "Debian"},   {"mint", "Mint"},       {"freebsd", "FreeBSD"},
-    {"openbsd", "OpenBSD"}, {"lfs", "LFS"},         {"crux", "CRUX"},       {"stars", "Starfield"},
-    {"aurora", "Aurora"},   {"ember", "Ember"},     {"ocean", "Ocean"},     {"synth", "Synthwave"},
+    {"tux", "Tux"},         {"gentoo", "Gentoo"}, {"steamos", "SteamOS"},  {"arch", "Arch"},
+    {"debian", "Debian"},   {"mint", "Mint"},     {"freebsd", "FreeBSD"},  {"openbsd", "OpenBSD"},
+    {"lfs", "LFS"},         {"crux", "CRUX"},     {"stars", "Starfield"},  {"synth", "Synthwave"},
     {"image", "Picture…"},  {"none", "Off"},
 };
 #define NTUX (int)G_N_ELEMENTS(TUX_CAPES)
@@ -697,7 +696,7 @@ static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
     if (px) {
         mc_tuxmc_set(a, "capeImage", p);
         set_tux_cape(a, "image");
-        mc_status(a, "Picture cape: only you see it, live in game");
+        mc_status(a, "Picture cape: other tux-mc players see it too (if they share pictures)");
     } else {
         mc_status(a, "Couldn't read that picture");
     }
@@ -741,14 +740,18 @@ static void on_tux_chip(GtkButton *b, gpointer data)
     }
     set_tux_cape(a, TUX_CAPES[i].id);
     mc_status(a, !strcmp(TUX_CAPES[i].id, "none") ? "Client cape off: you see your Mojang cape"
-                                                  : "Client cape %s: only you see it, live in game", TUX_CAPES[i].name);
+                                                  : "Client cape %s: other tux-mc players see it too", TUX_CAPES[i].name);
 }
 
 static void load_tux_cape(app_t *a)
 {
     a->tux_cape = mc_tuxmc_get(a, "cape");
-    if (!a->tux_cape)
-        a->tux_cape = g_strdup("theme");
+    /* no cape yet, or one that was removed in 1.2: Tux */
+    if (!a->tux_cape || !strcmp(a->tux_cape, "theme") || !strcmp(a->tux_cape, "aurora") ||
+        !strcmp(a->tux_cape, "ember") || !strcmp(a->tux_cape, "ocean")) {
+        g_free(a->tux_cape);
+        a->tux_cape = g_strdup("tux");
+    }
 }
 
 /* a chip's swatch: the cape itself, its outside face */
@@ -1024,7 +1027,7 @@ GtkWidget *mc_page_home(app_t *a)
     g_signal_connect(a->none_tile, "clicked", G_CALLBACK(on_no_cape), a);
     gtk_box_append(GTK_BOX(row), a->none_tile);
     gtk_box_append(GTK_BOX(cc), row);
-    GtkWidget *cl = mc_label("tux client cape: only you see it.", "dim");
+    GtkWidget *cl = mc_label("tux client cape: other tux-mc players see it too.", "dim");
     gtk_widget_set_margin_top(cl, 6);
     gtk_box_append(GTK_BOX(cc), cl);
     GtkWidget *flow = gtk_flow_box_new();

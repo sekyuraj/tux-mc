@@ -23,7 +23,6 @@ public final class Capes {
     /** id -> display name, in menu order */
     public static final Map<String, String> ALL = new LinkedHashMap<>();
     static {
-        ALL.put("theme", "Theme");
         ALL.put("tux", "Tux");
         ALL.put("gentoo", "Gentoo");
         ALL.put("steamos", "SteamOS");
@@ -35,9 +34,6 @@ public final class Capes {
         ALL.put("lfs", "LFS");
         ALL.put("crux", "CRUX");
         ALL.put("stars", "Starfield");
-        ALL.put("aurora", "Aurora");
-        ALL.put("ember", "Ember");
-        ALL.put("ocean", "Ocean");
         ALL.put("synth", "Synthwave");
         ALL.put("image", "Picture");
     }
@@ -58,8 +54,7 @@ public final class Capes {
     private static void invalidate() {
         if (themeDirty) {
             themeDirty = false;
-            made.remove("theme");
-            previews.remove("theme");
+            /* no cape uses the theme colours any more; kept for the hook in Theme */
         }
         long now = System.currentTimeMillis();
         if (now - imageChecked < 2000)
@@ -105,7 +100,7 @@ public final class Capes {
     public static ClientAsset.Texture remote(java.util.UUID u, Sync.RemoteCape c) {
         if (c == null || c.id().equals("official") || c.id().equals("none"))
             return null;
-        boolean own = (c.id().equals("theme") && c.pal() != null) || c.id().equals("image");
+        boolean own = c.id().equals("image");
         if (!own)
             return get(c.id());
         Made m = remote.get(u);

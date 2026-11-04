@@ -32,7 +32,7 @@ public final class Config {
     public static float zoomFov = 0.25f;
     public static boolean zoomToggle = false;       /* press once instead of holding */
     public static boolean emoteCamera = true;
-    public static String cape = "theme";            /* a Capes id, "official" or "none" */
+    public static String cape = "tux";              /* a Capes id, "official" or "none" */
     public static String capeImage = "";            /* png for the "image" cape */
     /* sharing: capes + emotes for other tux-mc players, over public Nostr relays */
     public static boolean sync = true;
@@ -95,6 +95,11 @@ public final class Config {
                         f.set(null, v);
                 } catch (NumberFormatException ignored) {
                 }
+            }
+            /* capes that were removed in 1.2: wear Tux instead of nothing */
+            if (java.util.Set.of("theme", "aurora", "ember", "ocean").contains(cape)) {
+                cape = "tux";
+                save();
             }
         } catch (Exception e) {
             TuxMc.LOG.warn("tuxmc: config: {}", e.toString());

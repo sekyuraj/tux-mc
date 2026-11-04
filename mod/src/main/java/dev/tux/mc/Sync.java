@@ -296,8 +296,6 @@ public final class Sync {
 
     private static String capeKey() {
         String c = Config.cape;
-        if (c.equals("theme"))
-            return c + Theme.accent + Theme.selection + Theme.bg + Theme.fgBright + Theme.warn;
         if (c.equals("image"))
             return c + Config.syncPicture + Config.capeImage + "@" + mtime(Config.capeImage);
         return c;
@@ -307,12 +305,6 @@ public final class Sync {
         JsonObject d = new JsonObject();
         String c = Config.cape;
         d.addProperty("c", Capes.ALL.containsKey(c) || c.equals("official") || c.equals("none") ? c : "official");
-        if (c.equals("theme")) {
-            JsonArray p = new JsonArray();
-            for (int v : new int[] {Theme.accent, Theme.selection, Theme.bg, Theme.fgBright, Theme.warn})
-                p.add(v);
-            d.add("p", p);
-        }
         String path = Config.capeImage;
         boolean picture = c.equals("image") && Config.syncPicture && !path.isBlank();
         work.execute(() -> {
@@ -535,14 +527,6 @@ public final class Sync {
         String c = d.get("c").getAsString();
         int[] pal = null, img = null;
         int w = 0, h = 0;
-        if (c.equals("theme") && d.has("p")) {
-            JsonArray p = d.getAsJsonArray("p");
-            if (p.size() == 5) {
-                pal = new int[5];
-                for (int i = 0; i < 5; i++)
-                    pal[i] = p.get(i).getAsInt() | 0xFF000000;
-            }
-        }
         if (c.equals("image")) {
             if (!Config.syncPicture || !d.has("i"))
                 c = "official";

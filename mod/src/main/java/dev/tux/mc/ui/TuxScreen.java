@@ -492,7 +492,7 @@ public class TuxScreen extends Screen {
         ids.add("official");
         ids.addAll(Capes.ALL.keySet());
         ids.add("none");
-        int cols = 7, gap = 8, rows = (ids.size() + cols - 1) / cols;
+        int cols = 5, gap = 8, rows = (ids.size() + cols - 1) / cols;
         int bw = (w - gap * (cols - 1)) / cols, bh = Math.min(82, (h - 16 - gap * (rows - 1)) / rows);
         int i = 0;
         for (String id : ids) {

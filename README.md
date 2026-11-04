@@ -48,7 +48,7 @@ Options:
 - **Players near**: an alert and a HUD count for players within a radius you pick (16 to 256 blocks, or the whole render distance).
 - **Hit delay fix**: on modern versions, a click that hits air blocks your clicks for half a second, so in 1.8-style PvP many hits are never sent. This removes that block. It's on by default; turn it off under Settings → Combat. It isn't on Hypixel's list of allowed mods, so whether you use it there is up to you.
 - **Emote wheel** on `.`: wave, dance, sit, lay, clap, spin, bow, dab.
-- **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, a few drawn ones (Starfield, Aurora, Ember, Ocean, Synthwave), a cape that follows your theme, and a cape from your own picture.
+- **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, two drawn ones (Starfield, Synthwave), and a cape from your own picture.
 - **Zoom** on C, fullbright, an info HUD, armor and totem counts, and a streamer mode that hides coordinates.
 - **Auto reconnect** after a kick.
 - **No block limit** for `/fill`, `/clone` and `/fillbiome` in singleplayer and LAN.
@@ -107,7 +107,7 @@ Minecraft 26.x ships unobfuscated, so the mod builds with plain `javac` against 
 - The Debian swirl is the Debian Open Use Logo.
 - The Arch, FreeBSD, OpenBSD and Mint marks come from [Simple Icons](https://simpleicons.org) (CC0). The Mint logo is from Wikimedia Commons.
 - The SteamOS mark comes from Steam's own boot image.
-- The Linux from Scratch and CRUX logos come from their websites.
+- The CRUX logo comes from crux.nu. The Linux from Scratch cape is a jigsaw piece drawn for tux-mc.
 
 All logos and names belong to their projects and are only used here as fan capes. tux-mc isn't affiliated with Mojang, Microsoft, Prism Launcher, Valve, or any of these projects.
 
