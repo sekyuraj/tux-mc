@@ -432,10 +432,14 @@ GtkWidget *mc_stage(app_t *a, mc3d_t *v, GtkDrawingAreaDrawFunc draw)
 
 /* ---- capes on the home page ---- */
 static const struct { const char *id, *name; } TUX_CAPES[] = {
-    {"theme", "Theme"}, {"tux", "Tux"},     {"gentoo", "Gentoo"},   {"stars", "Starfield"}, {"aurora", "Aurora"},
-    {"ember", "Ember"}, {"ocean", "Ocean"}, {"synth", "Synthwave"}, {"image", "Picture…"},  {"none", "Off"},
+    {"theme", "Theme"},     {"tux", "Tux"},         {"gentoo", "Gentoo"},   {"steamos", "SteamOS"},
+    {"arch", "Arch"},       {"debian", "Debian"},   {"mint", "Mint"},       {"freebsd", "FreeBSD"},
+    {"openbsd", "OpenBSD"}, {"lfs", "LFS"},         {"crux", "CRUX"},       {"stars", "Starfield"},
+    {"aurora", "Aurora"},   {"ember", "Ember"},     {"ocean", "Ocean"},     {"synth", "Synthwave"},
+    {"image", "Picture…"},  {"none", "Off"},
 };
 #define NTUX (int)G_N_ELEMENTS(TUX_CAPES)
+_Static_assert(G_N_ELEMENTS(TUX_CAPES) <= G_N_ELEMENTS(((app_t *)0)->tux_chips), "more capes than chip slots");
 static cairo_surface_t *tux_preview[NTUX];
 
 static cairo_surface_t *active_cape(app_t *a)
@@ -505,12 +509,14 @@ static cairo_surface_t *paint_tux_cape(app_t *a, const char *id, int s)
                        theme_color("warn", 0xFFD9D9D9)};
     tuxmc_img_t img = {0};
     guint32 *px = NULL;
-    if (!strcmp(id, "gentoo")) {
-        char *p = g_build_filename(g_get_user_data_dir(), "tux-mc", "data", "gentoo-cape.png", NULL);
+    if (tuxmc_cape_logo(id)) {
+        char *f = g_strconcat(id, "-cape.png", NULL);
+        char *p = g_build_filename(g_get_user_data_dir(), "tux-mc", "data", f, NULL);
         if (!g_file_test(p, G_FILE_TEST_EXISTS)) {
             g_free(p);
-            p = g_build_filename(g_get_user_data_dir(), "tux-control-center", "data", "gentoo-cape.png", NULL);
+            p = g_build_filename(g_get_user_data_dir(), "tux-control-center", "data", f, NULL);
         }
+        g_free(f);
         px = load_argb(p, &img.w, &img.h);
         g_free(p);
     } else if (!strcmp(id, "image")) {

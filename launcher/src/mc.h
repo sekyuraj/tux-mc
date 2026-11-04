@@ -55,7 +55,7 @@ struct app {
 
     /* home */
     mc3d_t view;
-    GtkWidget *stage, *start, *start_label, *none_tile, *tux_chips[16], *sub;
+    GtkWidget *stage, *start, *start_label, *none_tile, *tux_chips[32], *sub;
     double drag_x, drag_y, drag_vx;
     gint64 drag_t;
     gint64 last;

@@ -67,6 +67,35 @@ static uint32_t sample(const tuxmc_img_t *im, float u, float v)
     return mix(top, bot, ty);
 }
 
+/* capes that are a real logo (img) on a two-colour gradient. pixel = sample
+ * without smoothing, for logos that were pixelated on purpose (Tux) */
+static const struct {
+    const char *id;
+    uint32_t top, bottom;
+    int pixel;
+} LOGOS[] = {
+    {"tux", 0xFF1A1A1A, 0xFF2C2C2C, 1},     {"gentoo", 0xFF625A8C, 0xFF2E2848, 0},
+    {"steamos", 0xFF1B2838, 0xFF0B0F14, 0}, {"arch", 0xFF1E2229, 0xFF0B0D11, 0},
+    {"debian", 0xFFF4F4F4, 0xFFD6D6D6, 0},  {"mint", 0xFF2E2E2E, 0xFF141414, 0},
+    {"freebsd", 0xFF262626, 0xFF0D0D0D, 0}, {"openbsd", 0xFFF5D547, 0xFFD9A814, 0},
+    {"lfs", 0xFF2A3F5F, 0xFF0F1A2B, 0},     {"crux", 0xFF1F3354, 0xFF0C1626, 0},
+};
+
+static uint32_t sample_nearest(const tuxmc_img_t *im, float u, float v)
+{
+    if (!im || !im->px || u < 0 || v < 0 || u >= 1 || v >= 1)
+        return 0;
+    return im->px[(int)(v * im->h) * im->w + (int)(u * im->w)];
+}
+
+int tuxmc_cape_logo(const char *id)
+{
+    for (unsigned i = 0; i < sizeof LOGOS / sizeof *LOGOS; i++)
+        if (!strcmp(LOGOS[i].id, id))
+            return 1;
+    return 0;
+}
+
 /* u: 0..1 left->right, v: 0..1 top->bottom of the 10x16 outside face */
 static uint32_t color(const char *id, float u, float v, const tuxmc_pal_t *p, const tuxmc_img_t *img)
 {
@@ -79,15 +108,13 @@ static uint32_t color(const char *id, float u, float v, const tuxmc_pal_t *p, co
         uint32_t c = penguin(u, v * 1.6f - 0.25f, p->fg_bright, p->bg, p->warn);
         return c ? c : mix(p->accent, p->selection, v);
     }
-    if (!strcmp(id, "tux")) {
-        uint32_t c = penguin(u, v * 1.25f - 0.08f, 0xFFF2F2F2, 0xFF0B0B0B, 0xFFF4B400);
-        return c ? c : mix(0xFF1A1A1A, 0xFF2C2C2C, v);
-    }
-    if (!strcmp(id, "gentoo")) {
-        uint32_t c = mix(0xFF625A8C, 0xFF2E2848, v);
-        uint32_t l = sample(img, (u - 0.08f) / 0.84f, (v * 1.6f - 0.18f) / 0.84f);
-        return l ? over(c, l) : c;
-    }
+    for (unsigned i = 0; i < sizeof LOGOS / sizeof *LOGOS; i++)
+        if (!strcmp(LOGOS[i].id, id)) {
+            uint32_t c = mix(LOGOS[i].top, LOGOS[i].bottom, v);
+            float lu = (u - 0.08f) / 0.84f, lv = (v * 1.6f - 0.18f) / 0.84f;
+            uint32_t l = LOGOS[i].pixel ? sample_nearest(img, lu, lv) : sample(img, lu, lv);
+            return l ? over(c, l) : c;
+        }
     if (!strcmp(id, "image")) {          /* the user's picture, cover-fit to the face */
         if (!img || !img->px)
             return 0xFF303030;
@@ -157,8 +184,8 @@ static void face(uint32_t *out, int s, const char *id, int fx, int fy, const tux
             out[(fy * s + y) * 64 * s + fx * s + x] = color(id, (x + 0.5f) / w, (y + 0.5f) / h, p, img);
 }
 
-const char *const tuxmc_cape_ids[] = {"theme", "tux", "gentoo", "stars", "aurora", "ember", "ocean", "synth", "image",
-                                      NULL};
+const char *const tuxmc_cape_ids[] = {"theme",  "tux",     "gentoo", "steamos", "arch",  "debian", "mint",  "freebsd", "openbsd",
+                                      "lfs",    "crux",    "stars",  "aurora",  "ember", "ocean",  "synth", "image",   NULL};
 
 void tuxmc_cape(const char *id, int s, const tuxmc_pal_t *p, const tuxmc_img_t *img, uint32_t *out)
 {

@@ -34,6 +34,10 @@ public final class Config {
     public static boolean emoteCamera = true;
     public static String cape = "theme";            /* a Capes id, "official" or "none" */
     public static String capeImage = "";            /* png for the "image" cape */
+    /* sharing: capes + emotes for other tux-mc players, over public Nostr relays */
+    public static boolean sync = true;
+    public static boolean syncPicture = true;       /* send your Picture cape, and show other people's */
+    public static String syncRelays = "wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net";
     /* combat */
     public static boolean hitFix = true;            /* no half-second click block after a miss */
     /* servers */

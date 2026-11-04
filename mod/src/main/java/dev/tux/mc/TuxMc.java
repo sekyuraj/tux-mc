@@ -173,6 +173,7 @@ public class TuxMc implements ClientModInitializer {
         }
         Emotes.tick(mc);
         ServerTools.tick(mc);
+        Sync.tick(mc);
         Waypoints.tick(mc);
         while (menuKey.consumeClick())
             if (mc.gui.screen() == null)

@@ -14,7 +14,8 @@ tux-mc: $(SRC) src/mc.h src/mc3d.h $(NATIVE)/tuxmc.h
 
 install: tux-mc
 	install -Dm755 tux-mc $(DESTDIR)$(PREFIX)/bin/tux-mc
-	install -Dm644 gentoo-cape.png $(DESTDIR)$(PREFIX)/share/tux-mc/data/gentoo-cape.png
+	install -d $(DESTDIR)$(PREFIX)/share/tux-mc/data
+	install -m644 data/*-cape.png $(DESTDIR)$(PREFIX)/share/tux-mc/data/
 	sed 's|@BIN@|$(PREFIX)/bin/tux-mc|' tux-mc.desktop.in > tux-mc.desktop
 	install -Dm644 tux-mc.desktop $(DESTDIR)$(PREFIX)/share/applications/tux-mc.desktop
 

@@ -486,13 +486,13 @@ public class TuxScreen extends Screen {
 
     private void capes(GuiGraphicsExtractor g, int x, int y, int w, int h, int mx, int my, float al, float dt) {
         g.text(font, font.plainSubstrByWidth(Config.cape.equals("image") && Config.capeImage.isBlank()
-                ? "Picture: choose the image in the launcher (Home, client cape)." : "Only you see these. Mojang capes are picked in the launcher.", w), x, y,
+                ? "Picture: choose the image in the launcher (Home, client cape)." : Config.sync ? "Other tux-mc players see these too (Settings, Sharing)." : "Only you see these: sharing is off in Settings.", w), x, y,
                 Theme.alpha(Theme.dim, al), false);
         List<String> ids = new ArrayList<>();
         ids.add("official");
         ids.addAll(Capes.ALL.keySet());
         ids.add("none");
-        int cols = 6, gap = 8, rows = (ids.size() + cols - 1) / cols;
+        int cols = 7, gap = 8, rows = (ids.size() + cols - 1) / cols;
         int bw = (w - gap * (cols - 1)) / cols, bh = Math.min(82, (h - 16 - gap * (rows - 1)) / rows);
         int i = 0;
         for (String id : ids) {
@@ -602,6 +602,13 @@ public class TuxScreen extends Screen {
                 });
         toggle(g, x, y0, w, mx, my, al, dt, "Death points", "save a waypoint where you die", Config.deathPoints,
                 () -> Config.deathPoints = !Config.deathPoints);
+        section(g, x, y0, "Sharing", al);
+        toggle(g, x, y0, w, mx, my, al, dt, "Share capes and emotes",
+                "other tux-mc players see them: " + dev.tux.mc.Sync.status(), Config.sync,
+                () -> Config.sync = !Config.sync);
+        toggle(g, x, y0, w, mx, my, al, dt, "Share pictures",
+                "your Picture cape and other people's (more internet use)", Config.syncPicture,
+                () -> Config.syncPicture = !Config.syncPicture);
         section(g, x, y0, "Combat", al);
         toggle(g, x, y0, w, mx, my, al, dt, "Hit delay fix", "clicks right after a miss still hit (1.8 PvP, Hypixel)",
                 Config.hitFix, () -> Config.hitFix = !Config.hitFix);

@@ -16,8 +16,12 @@ typedef struct {
 extern const char *const tuxmc_cape_ids[];
 
 /* Paint cape `id` in the vanilla 64x32 layout scaled by s into out
- * (64*s x 32*s). img: the Gentoo logo for "gentoo", the picture for "image". */
+ * (64*s x 32*s). img: the logo for a logo cape (see tuxmc_cape_logo), the picture
+ * for "image". */
 void tuxmc_cape(const char *id, int s, const tuxmc_pal_t *pal, const tuxmc_img_t *img, uint32_t *out);
+
+/* 1 if cape `id` is a logo cape: it needs its <id>.png passed as img */
+int tuxmc_cape_logo(const char *id);
 
 /* one socket of this process (fixed 40-byte layout, read from Java) */
 typedef struct {

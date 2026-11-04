@@ -26,6 +26,14 @@ public final class Capes {
         ALL.put("theme", "Theme");
         ALL.put("tux", "Tux");
         ALL.put("gentoo", "Gentoo");
+        ALL.put("steamos", "SteamOS");
+        ALL.put("arch", "Arch");
+        ALL.put("debian", "Debian");
+        ALL.put("mint", "Mint");
+        ALL.put("freebsd", "FreeBSD");
+        ALL.put("openbsd", "OpenBSD");
+        ALL.put("lfs", "LFS");
+        ALL.put("crux", "CRUX");
         ALL.put("stars", "Starfield");
         ALL.put("aurora", "Aurora");
         ALL.put("ember", "Ember");
@@ -88,6 +96,38 @@ public final class Capes {
         return new ClientAsset.ResourceTexture(loc, loc);
     }
 
+    private record Made(long at, ClientAsset.Texture tex) {}
+
+    private static final Map<java.util.UUID, Made> remote = new HashMap<>();
+
+    /** another player's synced cape; built-in ones share our textures, theme and
+     *  picture capes get one of their own (their colours / their image) */
+    public static ClientAsset.Texture remote(java.util.UUID u, Sync.RemoteCape c) {
+        if (c == null || c.id().equals("official") || c.id().equals("none"))
+            return null;
+        boolean own = (c.id().equals("theme") && c.pal() != null) || c.id().equals("image");
+        if (!own)
+            return get(c.id());
+        Made m = remote.get(u);
+        if (m != null && m.at == c.at())
+            return m.tex;
+        Img im = c.img() == null ? null : new Img(c.img(), c.w(), c.h());
+        int[] pal = c.pal() != null ? c.pal() : new int[] {Theme.accent, Theme.selection, Theme.bg, Theme.fgBright, Theme.warn};
+        int[] px = im == null ? Native.cape(c.id(), S, pal, null, 0, 0) : Native.cape(c.id(), S, pal, im.px, im.w, im.h);
+        if (px == null)
+            return null;
+        int w = 64 * S, h = 32 * S;
+        NativeImage img = new NativeImage(w, h, true);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                img.setPixel(x, y, px[y * w + x]);
+        Identifier loc = Identifier.fromNamespaceAndPath("tuxmc", "capes/p/" + u.toString().replace("-", ""));
+        Minecraft.getInstance().getTextureManager().register(loc, new DynamicTexture(() -> "tuxmc cape of " + u, img));
+        ClientAsset.Texture t = new ClientAsset.ResourceTexture(loc, loc);
+        remote.put(u, new Made(c.at(), t));
+        return t;
+    }
+
     /** the outside face as 10x16 ARGB, for menu previews */
     public static int[] preview(String id) {
         invalidate();
@@ -104,22 +144,28 @@ public final class Capes {
 
     private static int[] paint(String id, int s) {
         int[] pal = {Theme.accent, Theme.selection, Theme.bg, Theme.fgBright, Theme.warn};
-        Img im = id.equals("gentoo") ? logo() : id.equals("image") ? picture() : null;
+        Img im = LOGOS.contains(id) ? logo(id) : id.equals("image") ? picture() : null;
         return im == null ? Native.cape(id, s, pal, null, 0, 0) : Native.cape(id, s, pal, im.px, im.w, im.h);
     }
 
     private record Img(int[] px, int w, int h) {}
 
-    private static Img logo;
+    /** capes drawn from assets/tuxmc/<id>.png (same list as LOGOS in native/capes.c) */
+    public static final java.util.Set<String> LOGOS = java.util.Set.of("tux", "gentoo", "steamos", "arch", "debian",
+            "mint", "freebsd", "openbsd", "lfs", "crux");
 
-    private static Img logo() {
-        if (logo == null)
-            try (var in = Capes.class.getResourceAsStream("/assets/tuxmc/gentoo.png")) {
-                logo = read(NativeImage.read(in));
+    private static final Map<String, Img> logos = new HashMap<>();
+
+    /** assets/tuxmc/<id>.png: the real logo, painted over the cape's colours */
+    private static Img logo(String id) {
+        return logos.computeIfAbsent(id, k -> {
+            try (var in = Capes.class.getResourceAsStream("/assets/tuxmc/" + k + ".png")) {
+                return read(NativeImage.read(in));
             } catch (Exception e) {
-                TuxMc.LOG.warn("tuxmc: gentoo logo: {}", e.toString());
+                TuxMc.LOG.warn("tuxmc: {} logo: {}", k, e.toString());
+                return null;
             }
-        return logo;
+        });
     }
 
     /** Config.capeImage: any png, cover-fitted to the cape */

@@ -9,13 +9,14 @@ import com.mojang.blaze3d.vertex.PoseStack;
 
 import dev.tux.mc.Capes;
 import dev.tux.mc.Emotes;
+import dev.tux.mc.Sync;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.world.entity.Avatar;
 import net.minecraft.world.entity.player.PlayerSkin;
 
-/** your own player: emote state + the custom cape */
+/** emotes + client capes: yours, and other tux-mc players' (Sync) */
 @Mixin(AvatarRenderer.class)
 public class AvatarRendererMixin {
     @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/Avatar;Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;F)V",
@@ -23,14 +24,22 @@ public class AvatarRendererMixin {
     private void tuxmc$extract(Avatar entity, AvatarRenderState s, float partial, CallbackInfo ci) {
         Emotes.Holder h = (Emotes.Holder) s;
         boolean me = entity == Minecraft.getInstance().player;
+        java.util.UUID self = me ? Sync.selfTest(entity.getUUID()) : null;
+        if (self != null)
+            me = false;                          /* test: draw yourself the way others see you */
+        java.util.UUID id = self != null ? self : entity.getUUID();
+        Sync.RemoteEmote re = me ? null : Sync.emote(id);
         if (me && Emotes.current != null) {
             h.tuxmc$set(Emotes.current, Emotes.time());
             Emotes.extract(s, Emotes.current, Emotes.time());
+        } else if (re != null) {
+            h.tuxmc$set(re.emote(), re.time());
+            Emotes.extract(s, re.emote(), re.time());
         } else {
             h.tuxmc$set(null, 0);
         }
-        if (me && s.skin != null) {
-            var cape = Capes.current();
+        if (s.skin != null) {
+            var cape = me ? Capes.current() : Capes.remote(id, Sync.cape(id));
             if (cape != null) {
                 PlayerSkin k = s.skin;
                 s.skin = new PlayerSkin(k.body(), cape, k.elytra(), k.model(), k.secure());

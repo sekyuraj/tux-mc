@@ -10,8 +10,8 @@ import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 
 /**
- * Emotes on your own player model. Purely visual and client-side: other players
- * don't see them (that would need a server plugin).
+ * Emotes on player models. Yours play locally; Sync sends the emote number so
+ * other tux-mc players see it too, and plays theirs on their models here.
  */
 public final class Emotes {
     public enum Emote {
@@ -27,7 +27,7 @@ public final class Emotes {
         }
     }
 
-    /** render-state side: set per frame for the local player only */
+    /** render-state side: set per frame, for you and for synced players */
     public interface Holder {
         Emote tuxmc$emote();
         float tuxmc$time();
@@ -49,6 +49,7 @@ public final class Emotes {
         }
         current = e;
         started = System.nanoTime();
+        Sync.sendEmote(e);
         sx = mc.player.getX();
         sz = mc.player.getZ();
         if (Config.emoteCamera && restoreCamera == null && mc.options.getCameraType() == CameraType.FIRST_PERSON) {
@@ -58,6 +59,8 @@ public final class Emotes {
     }
 
     public static void stop() {
+        if (current != null)
+            Sync.sendEmote(null);
         current = null;
         if (restoreCamera != null) {
             Minecraft.getInstance().options.setCameraType(restoreCamera);

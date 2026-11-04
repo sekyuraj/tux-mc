@@ -47,13 +47,28 @@ Options:
   - Session, Emotes, Capes, Settings.
 - **Players near**: an alert and a HUD count for players within a radius you pick (16 to 256 blocks, or the whole render distance).
 - **Hit delay fix**: on modern versions, a click that hits air blocks your clicks for half a second, so in 1.8-style PvP many hits are never sent. This removes that block. It's on by default; turn it off under Settings → Combat. It isn't on Hypixel's list of allowed mods, so whether you use it there is up to you.
-- **Emote wheel** on `.`, client-side only.
-- **Capes**: client-side HD capes painted by the native library, a cape from your own PNG, and a cape that follows your theme.
+- **Emote wheel** on `.`: wave, dance, sit, lay, clap, spin, bow, dab.
+- **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, a few drawn ones (Starfield, Aurora, Ember, Ocean, Synthwave), a cape that follows your theme, and a cape from your own picture.
 - **Zoom** on C, fullbright, an info HUD, armor and totem counts, and a streamer mode that hides coordinates.
 - **Auto reconnect** after a kick.
 - **No block limit** for `/fill`, `/clone` and `/fillbiome` in singleplayer and LAN.
 
 Settings are kept in the instance's `config/tuxmc.properties`, which is re-read while the game runs.
+
+## Other players see your cape and emotes
+
+Other tux-mc players on the same server see your client cape and your emotes, and you see theirs. Players without tux-mc see your normal Mojang cape.
+
+There's no tux-mc server. The data goes through public [Nostr](https://nostr.com) relays (relay.damus.io, nos.lol and relay.primal.net by default):
+
+- Your cape is one small message, sent when you join a server and again when you change it.
+- An emote is one tiny message that says which emote you played, sent only to players on the same server. At most 6 go out every 10 seconds.
+- Players never connect to each other, so nobody sees another player's IP. The relays see yours, like any website you visit.
+- What goes out: your UUID, your cape, your emotes, and a hash of the server address (not the address itself).
+- Every message is signed with your Mojang chat key, the one Mojang gives every Microsoft account. The receiver checks that Mojang issued the key for that UUID, so nobody can put a cape or an emote on someone else. tux-mc gets this key from Mojang itself, so this also works with No Chat Reports installed. The key is only used for these messages and never goes to a Minecraft server.
+- **Picture capes** are shared too. That means uploading your picture, at most about 45 KB, and downloading the pictures of other players near you, so it uses more internet than the built-in capes. Turn it off under Settings → Sharing → Share pictures, and you'll send and receive only the built-in capes.
+
+To turn all of it off, use Settings → Sharing → Share capes and emotes. You can change the relays with `syncRelays=` in `tuxmc.properties`. Sharing needs a Microsoft account and works on online-mode servers.
 
 ## The launcher
 
@@ -87,7 +102,14 @@ Minecraft 26.x ships unobfuscated, so the mod builds with plain `javac` against 
 
 ## Credits
 
-The Gentoo cape uses the Gentoo logo (© Gentoo Foundation, CC BY-SA 2.5). Not affiliated with Mojang, Microsoft, Prism Launcher or Gentoo.
+- Tux: by Larry Ewing (lewing@isc.tamu.edu), made with The GIMP. Pixelated for the cape.
+- The Gentoo logo is © Gentoo Foundation, CC BY-SA 2.5.
+- The Debian swirl is the Debian Open Use Logo.
+- The Arch, FreeBSD, OpenBSD and Mint marks come from [Simple Icons](https://simpleicons.org) (CC0). The Mint logo is from Wikimedia Commons.
+- The SteamOS mark comes from Steam's own boot image.
+- The Linux from Scratch and CRUX logos come from their websites.
+
+All logos and names belong to their projects and are only used here as fan capes. tux-mc isn't affiliated with Mojang, Microsoft, Prism Launcher, Valve, or any of these projects.
 
 ## License
 
