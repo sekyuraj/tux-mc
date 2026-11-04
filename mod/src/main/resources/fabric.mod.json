@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "tuxmc",
+  "version": "1.0.0",
+  "name": "tux client",
+  "description": "Menu on right shift: network map, server tools (queue, TPS, visual range), waypoints, emotes, capes, zoom, fullbright, HUD.",
+  "authors": ["sekyuraj"],
+  "license": "MIT",
+  "contact": { "sources": "https://github.com/sekyuraj/tux-mc" },
+  "icon": "assets/tuxmc/icon.png",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.tux.mc.TuxMc"] },
+  "mixins": ["tuxmc.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.20.0",
+    "fabric-api": "*",
+    "minecraft": "26.3"
+  }
+}

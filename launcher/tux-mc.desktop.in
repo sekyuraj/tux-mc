@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Minecraft (tux-mc)
+Comment=Launcher for the tux client, with Prism Launcher behind it
+Exec=@BIN@
+Icon=applications-games
+Categories=Game;
+StartupWMClass=dev.tux.Mc

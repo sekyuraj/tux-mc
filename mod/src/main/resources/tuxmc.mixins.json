@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.tux.mc.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AvatarRenderStateMixin",
+    "AvatarRendererMixin",
+    "PlayerModelMixin",
+    "CameraMixin",
+    "LightmapMixin",
+    "PacketListenerMixin",
+    "FillLimitMixin",
+    "CloneLimitMixin",
+    "FillBiomeLimitMixin",
+    "HitDelayMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}

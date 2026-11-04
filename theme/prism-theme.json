@@ -1,0 +1,23 @@
+{
+    "colors": {
+        "AlternateBase": "${bg_alt}",
+        "Base": "${bg_alt}",
+        "BrightText": "${fg_bright}",
+        "Button": "${surface}",
+        "ButtonText": "${fg}",
+        "Highlight": "${accent}",
+        "HighlightedText": "${bg}",
+        "Link": "${accent_bright}",
+        "Text": "${fg}",
+        "ToolTipBase": "${bg_alt}",
+        "ToolTipText": "${fg}",
+        "Window": "${bg}",
+        "WindowText": "${fg}",
+        "fadeAmount": 0.5,
+        "fadeColor": "${bg}"
+    },
+    "formatVersion": 1,
+    "name": "tux (${name})",
+    "qssFilePath": "themeStyle.css",
+    "widgets": "Fusion"
+}

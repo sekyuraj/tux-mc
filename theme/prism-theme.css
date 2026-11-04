@@ -1,0 +1,33 @@
+/* Rendered from theme/prism-theme.css by theme/render.sh (Qt style sheet) */
+QWidget { background: ${bg}; color: ${fg}; selection-background-color: ${accent}; selection-color: ${bg}; }
+QMainWindow::separator, QSplitter::handle { background: ${surface}; }
+QToolBar { background: ${bg}; border: none; border-bottom: 1px solid ${surface}; spacing: 2px; }
+QToolButton { background: transparent; color: ${fg}; border: 1px solid transparent; padding: 4px 8px; }
+QToolButton:hover { background: ${surface}; border-color: ${muted}; }
+QToolButton:checked, QToolButton:pressed { background: ${selection}; border-color: ${accent}; }
+QPushButton { background: ${surface}; color: ${fg}; border: 1px solid ${muted}; padding: 5px 14px; }
+QPushButton:hover { background: ${selection}; }
+QPushButton:default { border-color: ${accent}; }
+QPushButton:disabled, QToolButton:disabled { color: ${muted}; }
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox, QAbstractItemView {
+    background: ${bg_alt}; color: ${fg}; border: 1px solid ${surface}; }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus { border-color: ${accent}; }
+QAbstractItemView::item:hover { background: ${surface}; }
+QAbstractItemView::item:selected { background: ${selection}; color: ${fg_bright}; }
+QHeaderView::section { background: ${bg}; color: ${subtext}; border: none; border-bottom: 1px solid ${surface}; padding: 4px; }
+QTabBar::tab { background: ${bg}; color: ${dim}; border: 1px solid ${surface}; padding: 5px 12px; }
+QTabBar::tab:selected { color: ${fg_bright}; border-bottom: 2px solid ${accent}; }
+QTabWidget::pane { border: 1px solid ${surface}; }
+QMenuBar, QMenu { background: ${bg}; color: ${fg}; border: 1px solid ${surface}; }
+QMenu::item:selected, QMenuBar::item:selected { background: ${selection}; }
+QStatusBar { background: ${bg}; color: ${subtext}; border-top: 1px solid ${surface}; }
+QScrollBar { background: ${bg}; width: 10px; height: 10px; }
+QScrollBar::handle { background: ${muted}; min-height: 20px; min-width: 20px; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QProgressBar { background: ${surface}; border: none; color: ${fg_bright}; text-align: center; }
+QProgressBar::chunk { background: ${accent}; }
+QCheckBox::indicator, QRadioButton::indicator { border: 1px solid ${muted}; background: ${bg_alt}; width: 12px; height: 12px; }
+QCheckBox::indicator:checked, QRadioButton::indicator:checked { background: ${accent}; }
+QToolTip { background: ${bg_alt}; color: ${fg}; border: 1px solid ${muted}; }
+QGroupBox { border: 1px solid ${surface}; margin-top: 10px; padding-top: 6px; }
+QGroupBox::title { color: ${accent_bright}; subcontrol-origin: margin; left: 8px; }
