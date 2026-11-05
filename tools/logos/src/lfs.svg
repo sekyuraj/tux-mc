@@ -1,14 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
-  <!-- Linux from Scratch cape: a jigsaw piece with LFS knocked out of it -->
+  <!-- Linux from Scratch: Tux's head as a jigsaw piece, redrawn as a vector after
+       the LFS logo (www.linuxfromscratch.org), with the wordmark under it -->
   <defs>
-    <mask id="m">
-      <rect x="70" y="110" width="250" height="250" rx="22" fill="#fff"/>
-      <circle cx="195" cy="98" r="44" fill="#fff"/>
-      <circle cx="332" cy="235" r="44" fill="#fff"/>
-      <circle cx="70" cy="235" r="30" fill="#000"/>
-      <text x="212" y="266" text-anchor="middle" font-family="JetBrains Mono" font-weight="800"
-            font-size="92" fill="#000" letter-spacing="-4">LFS</text>
+    <mask id="piece">
+      <rect x="0" y="0" width="400" height="400" fill="#000"/>
+      <!-- body, the knob on top, a bulge on the left -->
+      <rect x="92" y="78" width="214" height="186" rx="46" fill="#fff"/>
+      <circle cx="182" cy="58" r="30" fill="#fff"/>
+      <rect x="166" y="66" width="32" height="24" fill="#fff"/>
+      <ellipse cx="96" cy="170" rx="18" ry="44" fill="#fff"/>
+      <!-- the socket on the right -->
+      <circle cx="304" cy="176" r="32" fill="#000"/>
     </mask>
+    <radialGradient id="shine" cx="0.32" cy="0.28" r="0.8">
+      <stop offset="0" stop-color="#4a4a4a"/>
+      <stop offset="0.45" stop-color="#151515"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+    <linearGradient id="beakTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="1" stop-color="#f4b400"/>
+    </linearGradient>
+    <linearGradient id="beakLow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8a000"/>
+      <stop offset="1" stop-color="#b86e00"/>
+    </linearGradient>
   </defs>
-  <rect width="400" height="400" fill="#f4f6fa" mask="url(#m)"/>
+
+  <rect width="400" height="400" fill="url(#shine)" mask="url(#piece)"/>
+
+  <!-- eyes -->
+  <ellipse cx="160" cy="150" rx="32" ry="42" fill="#fff"/>
+  <ellipse cx="240" cy="150" rx="32" ry="42" fill="#fff"/>
+  <ellipse cx="170" cy="160" rx="14" ry="21" fill="#000"/>
+  <ellipse cx="230" cy="160" rx="14" ry="21" fill="#000"/>
+  <circle cx="165" cy="150" r="4.5" fill="#fff"/>
+  <circle cx="225" cy="150" r="4.5" fill="#fff"/>
+
+  <!-- the beak: lower part, then the upper part over it -->
+  <path d="M150 238 C165 290 235 290 252 238 C230 252 172 252 150 238 Z" fill="url(#beakLow)"/>
+  <path d="M116 222 C134 192 266 192 286 222 C294 246 256 256 201 256 C146 256 108 246 116 222 Z"
+        fill="url(#beakTop)"/>
+  <path d="M150 214 C175 202 228 202 252 214" fill="none" stroke="#fff5c0" stroke-width="5"
+        stroke-linecap="round" opacity="0.7"/>
+
+  <!-- the wordmark -->
+  <text x="200" y="336" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="52"
+        fill="#16163f">linux</text>
+  <text x="200" y="372" text-anchor="middle" font-family="DejaVu Sans Mono" font-style="italic"
+        font-size="27" fill="#2a2a55">from scratch</text>
 </svg>

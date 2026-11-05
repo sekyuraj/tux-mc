@@ -117,7 +117,7 @@ Minecraft 26.x ships unobfuscated, so the mod builds with plain `javac` against 
 - The Debian swirl is the Debian Open Use Logo.
 - The Arch, FreeBSD, OpenBSD and Mint marks come from [Simple Icons](https://simpleicons.org) (CC0). The Mint logo is from Wikimedia Commons.
 - The SteamOS mark comes from Steam's own boot image.
-- The CRUX logo comes from crux.nu. The Linux from Scratch cape is a jigsaw piece drawn for tux-mc.
+- The CRUX logo comes from crux.nu. The Linux from Scratch jigsaw Tux is redrawn as a vector after the LFS logo, since no large version of it exists.
 
 All logos and names belong to their projects and are only used here as fan capes. tux-mc isn't affiliated with Mojang, Microsoft, Prism Launcher, Valve, or any of these projects.
 
