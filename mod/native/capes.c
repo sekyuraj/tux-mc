@@ -55,7 +55,7 @@ static const struct {
     uint32_t top, bottom;
     int pixel;
 } LOGOS[] = {
-    {"tux", 0xFF1A1A1A, 0xFF2C2C2C, 1},     {"gentoo", 0xFF625A8C, 0xFF2E2848, 0},
+    {"tux", 0xFF1A1A1A, 0xFF2C2C2C, 0},     {"gentoo", 0xFF625A8C, 0xFF2E2848, 0},
     {"steamos", 0xFF1B2838, 0xFF0B0F14, 0}, {"arch", 0xFF1E2229, 0xFF0B0D11, 0},
     {"debian", 0xFFF4F4F4, 0xFFD6D6D6, 0},  {"mint", 0xFF2E2E2E, 0xFF141414, 0},
     {"freebsd", 0xFF262626, 0xFF0D0D0D, 0}, {"openbsd", 0xFF2B4A78, 0xFF101C30, 0},
