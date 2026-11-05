@@ -19,6 +19,10 @@ import net.minecraft.resources.Identifier;
  */
 public final class Capes {
     public static final int S = 8;
+    /* logo capes get 4x the pixels (2048x1024): thin lines like Puffy's spines need them */
+    public static final int S_LOGO = 32;
+
+    private static int scale(String id) { return LOGOS.contains(id) ? S_LOGO : S; }
 
     /** id -> display name, in menu order */
     public static final Map<String, String> ALL = new LinkedHashMap<>();
@@ -64,7 +68,7 @@ public final class Capes {
         if (!k.equals(imageKey)) {
             imageKey = k;
             made.remove("image");
-            previews.remove("image");
+            previews.keySet().removeIf(x -> x.startsWith("image@"));
         }
     }
 
@@ -78,10 +82,11 @@ public final class Capes {
     }
 
     private static ClientAsset.Texture make(String id) {
-        int[] px = paint(id, S);
+        int s = scale(id);
+        int[] px = paint(id, s);
         if (px == null)
             return null;
-        int w = 64 * S, h = 32 * S;
+        int w = 64 * s, h = 32 * s;
         NativeImage img = new NativeImage(w, h, true);
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
@@ -123,16 +128,17 @@ public final class Capes {
         return t;
     }
 
-    /** the outside face as 10x16 ARGB, for menu previews */
-    public static int[] preview(String id) {
+    /** the outside face as (10*k)x(16*k) ARGB, for menu previews */
+    public static int[] preview(String id, int k) {
         invalidate();
-        return previews.computeIfAbsent(id, k -> {
-            int[] px = paint(k, 1);
+        return previews.computeIfAbsent(id + "@" + k, key -> {
+            int[] px = paint(id, k);
             if (px == null)
                 return null;
-            int[] f = new int[160];
-            for (int y = 0; y < 16; y++)
-                System.arraycopy(px, (y + 1) * 64 + 1, f, y * 10, 10);
+            int w = 10 * k, h = 16 * k;
+            int[] f = new int[w * h];
+            for (int y = 0; y < h; y++)
+                System.arraycopy(px, (y + k) * 64 * k + k, f, y * w, w);
             return f;
         });
     }

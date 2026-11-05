@@ -538,7 +538,8 @@ static void repaint_tux_capes(app_t *a)
 {
     if (a->tux_cape_tex)
         cairo_surface_destroy(a->tux_cape_tex);
-    a->tux_cape_tex = a->tux_cape ? paint_tux_cape(a, a->tux_cape, 8) : NULL;
+    /* logo capes at 32x (2048x1024), like in game: thin lines stay sharp on the model */
+    a->tux_cape_tex = a->tux_cape ? paint_tux_cape(a, a->tux_cape, tuxmc_cape_logo(a->tux_cape) ? 32 : 8) : NULL;
     for (int i = 0; i < NTUX; i++) {
         if (tux_preview[i])
             cairo_surface_destroy(tux_preview[i]);

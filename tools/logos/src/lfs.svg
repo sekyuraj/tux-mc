@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <!-- Linux from Scratch cape: a jigsaw piece with LFS knocked out of it -->
+  <defs>
+    <mask id="m">
+      <rect x="70" y="110" width="250" height="250" rx="22" fill="#fff"/>
+      <circle cx="195" cy="98" r="44" fill="#fff"/>
+      <circle cx="332" cy="235" r="44" fill="#fff"/>
+      <circle cx="70" cy="235" r="30" fill="#000"/>
+      <text x="212" y="266" text-anchor="middle" font-family="JetBrains Mono" font-weight="800"
+            font-size="92" fill="#000" letter-spacing="-4">LFS</text>
+    </mask>
+  </defs>
+  <rect width="400" height="400" fill="#f4f6fa" mask="url(#m)"/>
+</svg>

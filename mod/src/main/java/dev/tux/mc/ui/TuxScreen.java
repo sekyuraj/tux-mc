@@ -506,12 +506,13 @@ public class TuxScreen extends Screen {
             int px = bh >= 76 ? 3 : 2;
             int cw = 10 * px, chh = 16 * px;
             int ox = bx + (bw - cw) / 2, oy = by + Math.max(4, (bh - 14 - chh) / 2) - Math.round(a * 2);
-            int[] pv = Capes.ALL.containsKey(id) ? Capes.preview(id) : null;
+            /* painted at px times the vanilla size: one GUI pixel per cape pixel */
+            int[] pv = Capes.ALL.containsKey(id) ? Capes.preview(id, px) : null;
             if (pv != null) {
-                for (int yy = 0; yy < 16; yy++)
-                    for (int xx = 0; xx < 10; xx++)
-                        g.fill(ox + xx * px, oy + yy * px, ox + xx * px + px, oy + yy * px + px,
-                                Theme.alpha(pv[yy * 10 + xx], al));
+                int pw = 10 * px;
+                for (int yy = 0; yy < 16 * px; yy++)
+                    for (int xx = 0; xx < pw; xx++)
+                        g.fill(ox + xx, oy + yy, ox + xx + 1, oy + yy + 1, Theme.alpha(pv[yy * pw + xx], al));
             } else {
                 g.outline(ox, oy, cw, chh, Theme.alpha(Theme.muted, al));
                 String t = id.equals("none") ? "✕" : "M";
