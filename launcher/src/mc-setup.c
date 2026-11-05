@@ -221,11 +221,20 @@ static bool install_prism(char **err)
             ok = g_spawn_sync(dir, argv, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
                               NULL, NULL, &status, &e) && g_spawn_check_wait_status(status, NULL);
         } else {
-            /* tar.exe (Windows 10 and up) unpacks zips */
+            /* tar.exe unpacks zips (Windows 10 1803 and up); before that, PowerShell */
             char *argv[] = {"tar.exe", "-xf", file, "-C", dir, NULL};
             ok = g_spawn_sync(dir, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
                               G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL, NULL, NULL, &status, &e) &&
                  g_spawn_check_wait_status(status, NULL);
+            if (!ok) {
+                g_clear_error(&e);
+                char *cmd = g_strdup_printf("Expand-Archive -Force -LiteralPath '%s' -DestinationPath '%s'", file, dir);
+                char *ps[] = {"powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmd, NULL};
+                ok = g_spawn_sync(dir, ps, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL |
+                                  G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL, NULL, NULL, &status, &e) &&
+                     g_spawn_check_wait_status(status, NULL);
+                g_free(cmd);
+            }
         }
         if (!ok)
             *err = g_strdup_printf("couldn't unpack Prism%s%s", e ? ": " : "", e ? e->message : "");

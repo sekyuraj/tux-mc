@@ -31,6 +31,9 @@ for f in $(deps "$APP/bin/tux-mc.exe" $(find "$APP/lib" -name '*.dll')); do
     cp -n "$f" "$APP/bin/"
 done
 
+# GLib starts programs (Prism, tar) through these helpers on Windows
+cp "$PREFIX"/bin/gspawn-win64-helper*.exe "$APP/bin/"
+
 cp "$PREFIX/share/glib-2.0/schemas/gschemas.compiled" "$APP/share/glib-2.0/schemas/"
 cp -r "$PREFIX/share/icons/Adwaita" "$PREFIX/share/icons/hicolor" "$APP/share/icons/"
 
