@@ -54,7 +54,7 @@ Options:
   - Waypoints: kept per server, with death points, nether coordinates and a HUD arrow.
   - Session, Emotes, Capes, Settings.
 - **Players near**: an alert and a HUD count for players within a radius you pick (16 to 256 blocks, or the whole render distance).
-- **Render distance up to 256** in Video Settings (Sodium's slider follows). In singleplayer the built-in server loads up to 125 chunks, the most it can track. With Distant Horizons, 12 to 32 looks the same and loads much faster.
+- **Render distance up to 256** in Video Settings (Sodium's slider follows). In singleplayer the built-in server loads up to 125 chunks; past that it can't keep up (at 251 it used 20 GB and the chunks around the player never arrived). For a view that far, set Distant Horizons' LOD radius to 256 and keep the render distance at 12 to 32.
 - **Hit delay fix**: on modern versions, a click that hits air blocks your clicks for half a second, so in 1.8-style PvP many hits are never sent. This removes that block. It's on by default; turn it off under Settings → Combat. It isn't on Hypixel's list of allowed mods, so whether you use it there is up to you.
 - **Emote wheel** on `.`: wave, dance, sit, lay, clap, spin, bow, dab.
 - **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, two drawn ones (Starfield, Synthwave), and a cape from your own picture.

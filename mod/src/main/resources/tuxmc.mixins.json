@@ -17,7 +17,9 @@
     "RenderDistanceMixin",
     "ViewDistanceMixin",
     "TicketRangeMixin",
-    "ChunkPriorityMixin"
+    "ChunkPriorityMixin",
+    "TicketLevelMixin",
+    "TicketViewMixin"
   ],
   "injectors": {
     "defaultRequire": 1

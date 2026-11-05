@@ -8,10 +8,12 @@ import net.minecraft.server.level.DistanceManager;
 
 /**
  * The player ticket tracker only spreads 32 chunks out, so chunks past 32 never
- * load even with a bigger view distance. It keeps levels in a Long2ByteMap and
- * reads them back as SIGNED bytes, with range + 2 as the "not near" default:
- * that has to stay <= 127, so 125 is the hard limit. (251 wrapped to -3, every
- * chunk counted as next to the player, and chunk loading fell apart.)
+ * load even with a bigger view distance. Its levels are bytes (read unsigned
+ * by TicketLevelMixin/TicketViewMixin; vanilla reads them signed, which broke
+ * everything past 125) and its graph takes at most 253 levels, so 251 would be
+ * the hard limit. 125 is what the server can actually serve: tested at 251, it
+ * fell behind generating ~250k chunks (20 GB, 12 fps) and the chunks around the
+ * player never arrived. For a farther view, raise Distant Horizons' LOD radius.
  */
 @Mixin(DistanceManager.class)
 public class TicketRangeMixin {
