@@ -8,12 +8,12 @@ import net.minecraft.server.level.ChunkMap;
 
 /**
  * Singleplayer/LAN: the integrated server clamps view distance to 32. Raise it
- * to 251, the most the player ticket tracker can hold (see TicketRangeMixin).
+ * to 125, the most the player ticket tracker can hold (see TicketRangeMixin).
  */
 @Mixin(ChunkMap.class)
 public class ViewDistanceMixin {
     @ModifyConstant(method = "setServerViewDistance(I)V", constant = @Constant(intValue = 32))
     private int tuxmc$maxViewDistance(int old) {
-        return 251;
+        return 125;
     }
 }

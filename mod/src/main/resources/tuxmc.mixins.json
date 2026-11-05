@@ -16,7 +16,8 @@
     "HitDelayMixin",
     "RenderDistanceMixin",
     "ViewDistanceMixin",
-    "TicketRangeMixin"
+    "TicketRangeMixin",
+    "ChunkPriorityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
