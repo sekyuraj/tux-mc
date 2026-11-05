@@ -139,6 +139,7 @@ void mc_cfg_set_str(const char *key, const char *v);
 long mc_http(const char *method, const char *url, const char *token, const char *ctype, const char *body,
              GByteArray *out);
 bool mc_http_download(const char *url, const char *path, char **err);
+char *mc_http_location(const char *url);
 long mc_http_upload_skin(const char *token, const char *variant, const char *path, GByteArray *out);
 /* a fresh Minecraft token (refreshing through Xbox if needed); NULL on failure. Blocking. */
 char *mc_auth_token(app_t *a, char **err);

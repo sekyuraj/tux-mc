@@ -71,6 +71,23 @@ long mc_http(const char *method, const char *url, const char *token, const char 
     return code;
 }
 
+/* where url redirects to (no body fetched), or NULL */
+char *mc_http_location(const char *url)
+{
+    struct curl_slist *h = NULL;
+    CURL *c = easy(url, &h, NULL, NULL, NULL);
+    if (!c)
+        return NULL;
+    curl_easy_setopt(c, CURLOPT_NOBODY, 1L);
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 0L);
+    char *res = NULL, *loc = NULL;
+    if (curl_easy_perform(c) == CURLE_OK && curl_easy_getinfo(c, CURLINFO_REDIRECT_URL, &loc) == CURLE_OK && loc)
+        res = g_strdup(loc);
+    curl_slist_free_all(h);
+    curl_easy_cleanup(c);
+    return res;
+}
+
 static size_t to_file(char *p, size_t s, size_t n, void *f) { return fwrite(p, s, n, f); }
 
 /* a big file straight to disk (Prism, mods): no overall time limit, but it

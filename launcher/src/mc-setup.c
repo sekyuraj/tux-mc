@@ -169,47 +169,49 @@ static JsonParser *get_json(const char *url, JsonNode **root)
     return p;
 }
 
-/* the download link of Prism's newest release for this system */
-static char *prism_asset(char **err)
+/* Prism's newest release for this system, without GitHub's API (it's rate
+ * limited): the AppImage has a fixed name under latest/download; the Windows
+ * zips carry the version, which the releases/latest redirect gives away.
+ * Windows: the MinGW build first (brings its own runtime), MSVC second. */
+static char **prism_urls(char **err)
 {
-    JsonNode *root;
-    JsonParser *p = get_json("https://api.github.com/repos/PrismLauncher/PrismLauncher/releases/latest", &root);
-    char *url = NULL;
-    JsonObject *o = root && JSON_NODE_HOLDS_OBJECT(root) ? json_node_get_object(root) : NULL;
-    JsonArray *as = o && json_object_has_member(o, "assets") ? json_object_get_array_member(o, "assets") : NULL;
-    /* Windows: the MinGW portable zip carries its own runtime; MSVC portable as a fallback */
-    const char *want[] = {MC_LINUX ? "-x86_64.AppImage" : "Windows-MinGW-w64-Portable",
-                          MC_LINUX ? "x86_64.AppImage" : "Windows-MSVC-Portable"};
-    for (int k = 0; k < 2 && !url; k++)
-        for (guint i = 0; as && i < json_array_get_length(as) && !url; i++) {
-            JsonObject *e = json_array_get_object_element(as, i);
-            const char *n = json_object_get_string_member_with_default(e, "name", "");
-            if (!strstr(n, want[k]) || strstr(n, "arm64") || strstr(n, "aarch64") || strstr(n, ".zsync"))
-                continue;
-            if (!MC_LINUX && !g_str_has_suffix(n, ".zip"))
-                continue;
-            url = g_strdup(json_object_get_string_member_with_default(e, "browser_download_url", ""));
-        }
-    g_object_unref(p);
-    if (!url || !*url) {
-        g_free(url);
-        *err = g_strdup("couldn't find a Prism download on GitHub");
+    const char *base = "https://github.com/PrismLauncher/PrismLauncher/releases";
+    char **urls = g_new0(char *, 3);
+    if (MC_LINUX) {
+        urls[0] = g_strdup_printf("%s/latest/download/PrismLauncher-Linux-x86_64.AppImage", base);
+        return urls;
+    }
+    char *latest = g_strdup_printf("%s/latest", base), *loc = mc_http_location(latest);
+    g_free(latest);
+    const char *tag = loc ? strstr(loc, "/tag/") : NULL;
+    if (!tag) {
+        g_free(loc);
+        g_free(urls);
+        *err = g_strdup("couldn't find Prism's newest version on GitHub");
         return NULL;
     }
-    return url;
+    tag += 5;
+    urls[0] = g_strdup_printf("%s/download/%s/PrismLauncher-Windows-MinGW-w64-Portable-%s.zip", base, tag, tag);
+    urls[1] = g_strdup_printf("%s/download/%s/PrismLauncher-Windows-MSVC-Portable-%s.zip", base, tag, tag);
+    g_free(loc);
+    return urls;
 }
 
 static bool install_prism(char **err)
 {
     say_bg("Downloading Prism Launcher…");
-    char *url = prism_asset(err);
-    if (!url)
+    char **urls = prism_urls(err);
+    if (!urls)
         return false;
     char *dir = mc_sys_own_prism_dir();
     g_mkdir_with_parents(dir, 0755);
     char *file = g_build_filename(dir, MC_LINUX ? "PrismLauncher.AppImage" : "PrismLauncher.zip", NULL);
-    bool ok = mc_http_download(url, file, err);
-    g_free(url);
+    bool ok = false;
+    for (int i = 0; urls[i] && !ok; i++) {
+        g_clear_pointer(err, g_free);
+        ok = mc_http_download(urls[i], file, err);
+    }
+    g_strfreev(urls);
     if (ok) {
         say_bg("Unpacking Prism Launcher…");
         int status = 0;

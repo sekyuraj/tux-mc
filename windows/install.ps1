@@ -62,19 +62,30 @@ function Find-Prism {
 $PrismExe = Find-Prism
 if (-not $PrismExe) {
     Say "Prism Launcher isn't installed: downloading it"
-    $rel = Invoke-RestMethod 'https://api.github.com/repos/PrismLauncher/PrismLauncher/releases/latest' -Headers $UA
+    # the newest version from where releases/latest redirects to (GitHub's API is rate limited)
+    $base = 'https://github.com/PrismLauncher/PrismLauncher/releases'
+    $req = [Net.HttpWebRequest]::Create("$base/latest")
+    $req.AllowAutoRedirect = $false
+    $req.Method = 'HEAD'
+    $req.UserAgent = 'tux-mc-installer'
+    $resp = $req.GetResponse()
+    $tag = ($resp.Headers['Location'] -split '/tag/')[-1]
+    $resp.Close()
+    if (-not $tag) { throw "couldn't find Prism's newest version on GitHub" }
     # the MinGW build carries its own runtime; the MSVC one needs the VC++ redistributable
-    $asset = $rel.assets | Where-Object { $_.name -like '*Windows-MinGW-w64-Portable*.zip' -and $_.name -notlike '*arm64*' } |
-             Select-Object -First 1
-    if (-not $asset) {
-        $asset = $rel.assets | Where-Object { $_.name -like '*Windows-MSVC-Portable*.zip' -and $_.name -notlike '*arm64*' } |
-                 Select-Object -First 1
-    }
-    if (-not $asset) { throw "couldn't find a Prism download on GitHub" }
-    Note $asset.name
-    New-Item -ItemType Directory -Force -Path $OwnPrism | Out-Null
     $zip = Join-Path $env:TEMP 'PrismLauncher.zip'
-    Invoke-WebRequest $asset.browser_download_url -OutFile $zip -Headers $UA -UseBasicParsing
+    $got = $false
+    foreach ($kind in 'MinGW-w64', 'MSVC') {
+        $name = "PrismLauncher-Windows-$kind-Portable-$tag.zip"
+        try {
+            Invoke-WebRequest "$base/download/$tag/$name" -OutFile $zip -Headers $UA -UseBasicParsing
+            Note $name
+            $got = $true
+            break
+        } catch { }
+    }
+    if (-not $got) { throw "couldn't download Prism $tag" }
+    New-Item -ItemType Directory -Force -Path $OwnPrism | Out-Null
     Expand-Archive $zip -DestinationPath $OwnPrism -Force
     Remove-Item $zip
     $PrismExe = Find-Prism

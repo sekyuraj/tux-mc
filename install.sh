@@ -41,9 +41,7 @@ command -v envsubst >/dev/null || die "envsubst (gettext) is missing"
 OWN=${XDG_DATA_HOME:-$HOME/.local/share}/tux-mc/prism
 if ! command -v prismlauncher >/dev/null && [[ ! -x $OWN/squashfs-root/AppRun ]]; then
     say "Prism Launcher isn't installed: downloading it"
-    url=$(curl -fsSL https://api.github.com/repos/PrismLauncher/PrismLauncher/releases/latest |
-        grep -o '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v aarch64 | head -1 | cut -d'"' -f4)
-    [[ -n $url ]] || die "couldn't find Prism's AppImage on GitHub"
+    url=https://github.com/PrismLauncher/PrismLauncher/releases/latest/download/PrismLauncher-Linux-x86_64.AppImage
     mkdir -p "$OWN"
     curl -fL --progress-bar -o "$OWN/PrismLauncher.AppImage" "$url"
     chmod +x "$OWN/PrismLauncher.AppImage"
