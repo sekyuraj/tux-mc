@@ -4,7 +4,8 @@
 # folder), the Minecraft 26.3 Fabric instance, Fabric API, the tuxmc mod, the
 # launcher with Start menu and desktop shortcuts, the black theme, and at the
 # end the Microsoft sign-in in Prism. Nothing here needs admin rights.
-param([switch]$NoShortcut)
+# -NoShortcut, -NoSignIn, -NoStart: skip those steps (CI runs it this way)
+param([switch]$NoShortcut, [switch]$NoSignIn, [switch]$NoStart)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'          # PowerShell 5's progress bar makes downloads crawl
@@ -98,7 +99,7 @@ $cfg = Join-Path $PrismDir 'prismlauncher.cfg'
 if ($PrismRunning) {
     Note "Prism is open, so its settings are left alone (close it and run this again for the black theme)"
 } else {
-    $lines = if (Test-Path $cfg) { [Collections.Generic.List[string]](Get-Content $cfg) } else { [Collections.Generic.List[string]]@('[General]') }
+    $lines = if (Test-Path $cfg) { [Collections.Generic.List[string]]@(Get-Content $cfg) } else { [Collections.Generic.List[string]]@('[General]') }
     if (-not ($lines -contains '[General]')) { $lines.Insert(0, '[General]') }
     $want = [ordered]@{
         AutomaticJavaDownload = 'true'   # Prism fetches the Java 26.3 needs
@@ -154,7 +155,7 @@ Rename-Item $jar 'tuxmc.jar'
 # ---------------------------------------------------------------- account --
 $Accounts = Join-Path $PrismDir 'accounts.json'
 function Signed-In { (Test-Path $Accounts) -and ((Get-Content $Accounts -Raw) -match '"profile"') }
-if (-not (Signed-In)) {
+if (-not $NoSignIn -and -not (Signed-In)) {
     Say 'Sign in to your Microsoft account in Prism'
     Note 'Prism opens now. Click "Add Microsoft account" and sign in with the account that owns Minecraft'
     Note '(or: Accounts at the top right, Manage Accounts, Add Microsoft).'
@@ -166,5 +167,7 @@ if (-not (Signed-In)) {
 }
 
 Say 'Done. Start tux-mc from the Start menu or the desktop.'
-$go = Read-Host 'Start it now? [Y/n]'
-if ($go -notmatch '^[nN]') { Start-Process $Exe }
+if (-not $NoStart) {
+    $go = Read-Host 'Start it now? [Y/n]'
+    if ($go -notmatch '^[nN]') { Start-Process $Exe }
+}

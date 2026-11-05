@@ -42,6 +42,25 @@ jobs:
       - name: Pack tux-mc-windows.zip
         run: bash windows/package.sh
 
+      # the installer on a clean Windows, in Windows PowerShell 5.1 like users have it
+      - name: Test install.ps1
+        shell: pwsh
+        run: |
+          Expand-Archive dist/tux-mc-windows.zip -DestinationPath $env:RUNNER_TEMP/t
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:RUNNER_TEMP/t/tux-mc-windows/install.ps1" -NoSignIn -NoStart
+          if ($LASTEXITCODE) { throw "install.ps1 failed" }
+          $prism = Join-Path $env:LOCALAPPDATA 'tux-mc\prism'
+          $need = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\tux-mc\bin\tux-mc.exe'),
+            (Join-Path $prism 'prismlauncher.exe'),
+            (Join-Path $prism 'instances\26.3\mmc-pack.json'),
+            (Join-Path $prism 'instances\26.3\minecraft\mods\tuxmc.jar'),
+            (Join-Path $prism 'themes\tux\theme.json')
+          )
+          foreach ($f in $need) { if (-not (Test-Path $f)) { throw "missing: $f" } else { "ok: $f" } }
+          Get-ChildItem (Join-Path $prism 'instances\26.3\minecraft\mods') | Select-Object Name, Length
+          Get-Content (Join-Path $prism 'prismlauncher.cfg')
+
       - uses: actions/upload-artifact@v4
         with:
           name: tux-mc-windows
