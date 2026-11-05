@@ -110,8 +110,10 @@ $cfg = Join-Path $PrismDir 'prismlauncher.cfg'
 if ($PrismRunning) {
     Note "Prism is open, so its settings are left alone (close it and run this again for the black theme)"
 } else {
-    $lines = if (Test-Path $cfg) { [Collections.Generic.List[string]]@(Get-Content $cfg) } else { [Collections.Generic.List[string]]@('[General]') }
-    if (-not ($lines -contains '[General]')) { $lines.Insert(0, '[General]') }
+    # built item by item: assigning an `if` would unroll the list into plain strings
+    $lines = New-Object 'Collections.Generic.List[string]'
+    if (Test-Path $cfg) { foreach ($l in Get-Content $cfg) { $lines.Add($l) } }
+    if (-not $lines.Contains('[General]')) { $lines.Insert(0, '[General]') }
     $want = [ordered]@{
         AutomaticJavaDownload = 'true'   # Prism fetches the Java 26.3 needs
         AutomaticJavaSwitch   = 'true'
