@@ -10,6 +10,7 @@
 
 #include <curl/curl.h>
 #include <glib/gstdio.h>
+#include <stdio.h>
 #include <json-glib/json-glib.h>
 #include <string.h>
 
@@ -40,6 +41,10 @@ static CURL *easy(const char *url, struct curl_slist **h, const char *token, con
     curl_easy_setopt(c, CURLOPT_USERAGENT, "tux-mc/2.0");
     curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+#ifdef _WIN32
+    /* the certificates Windows trusts, instead of a CA file curl can't find */
+    curl_easy_setopt(c, CURLOPT_SSL_OPTIONS, (long)CURLSSLOPT_NATIVE_CA);
+#endif
     if (out) {
         curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, sink);
         curl_easy_setopt(c, CURLOPT_WRITEDATA, out);
@@ -64,6 +69,47 @@ long mc_http(const char *method, const char *url, const char *token, const char 
     curl_slist_free_all(h);
     curl_easy_cleanup(c);
     return code;
+}
+
+static size_t to_file(char *p, size_t s, size_t n, void *f) { return fwrite(p, s, n, f); }
+
+/* a big file straight to disk (Prism, mods): no overall time limit, but it
+ * gives up when less than 1 KB/s arrives for 60 s. Writes path.part first. */
+bool mc_http_download(const char *url, const char *path, char **err)
+{
+    char *part = g_strconcat(path, ".part", NULL);
+    FILE *f = g_fopen(part, "wb");
+    if (!f) {
+        *err = g_strdup_printf("can't write %s", part);
+        g_free(part);
+        return false;
+    }
+    struct curl_slist *h = NULL;
+    CURL *c = easy(url, &h, NULL, NULL, NULL);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 0L);
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_LIMIT, 1024L);
+    curl_easy_setopt(c, CURLOPT_LOW_SPEED_TIME, 60L);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, to_file);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, f);
+    long code = 0;
+    CURLcode r = curl_easy_perform(c);
+    if (r == CURLE_OK)
+        curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &code);
+    curl_slist_free_all(h);
+    curl_easy_cleanup(c);
+    fclose(f);
+    if (r != CURLE_OK || code != 200) {
+        *err = r != CURLE_OK ? g_strdup(curl_easy_strerror(r)) : g_strdup_printf("HTTP %ld for %s", code, url);
+        g_remove(part);
+        g_free(part);
+        return false;
+    }
+    g_remove(path);
+    bool ok = g_rename(part, path) == 0;
+    if (!ok)
+        *err = g_strdup_printf("can't rename %s", part);
+    g_free(part);
+    return ok;
 }
 
 long mc_http_upload_skin(const char *token, const char *variant, const char *path, GByteArray *out)

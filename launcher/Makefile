@@ -5,12 +5,22 @@ CFLAGS  += -std=gnu11 -Wall -Wextra
 PREFIX  ?= $(HOME)/.local
 NATIVE  := ../mod/native
 PKGS    := gtk4 json-glib-1.0 libcurl
-SRC     := src/mc.c src/mc-net.c src/mc-pages.c src/mc-configs.c src/mc3d.c $(NATIVE)/capes.c
+SRC     := src/mc.c src/mc-net.c src/mc-pages.c src/mc-configs.c src/mc3d.c src/mc-sys.c src/mc-setup.c \
+           $(NATIVE)/capes.c
 
-all: tux-mc
+# MSYS2 (UCRT64) on Windows: a GUI .exe, no console window
+ifeq ($(OS),Windows_NT)
+EXE     := tux-mc.exe
+LDEXTRA := -mwindows
+else
+EXE     := tux-mc
+LDEXTRA :=
+endif
 
-tux-mc: $(SRC) src/mc.h src/mc3d.h $(NATIVE)/tuxmc.h
-	$(CC) $(CFLAGS) -I$(NATIVE) -o $@ $(SRC) $$(pkg-config --cflags --libs $(PKGS)) -lm
+all: $(EXE)
+
+$(EXE): $(SRC) src/mc.h src/mc3d.h $(NATIVE)/tuxmc.h
+	$(CC) $(CFLAGS) -I$(NATIVE) -o $@ $(SRC) $$(pkg-config --cflags --libs $(PKGS)) -lm $(LDEXTRA)
 
 install: tux-mc
 	install -Dm755 tux-mc $(DESTDIR)$(PREFIX)/bin/tux-mc
@@ -20,6 +30,6 @@ install: tux-mc
 	install -Dm644 tux-mc.desktop $(DESTDIR)$(PREFIX)/share/applications/tux-mc.desktop
 
 clean:
-	rm -f tux-mc tux-mc.desktop
+	rm -f tux-mc tux-mc.exe tux-mc.desktop
 
 .PHONY: all install clean

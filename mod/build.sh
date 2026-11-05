@@ -4,7 +4,8 @@
 # Launch the instance in Prism once first, so it has downloaded them.
 #   ./build.sh                build, then copy into the instance's mods folder
 #   ./build.sh --no-install   build only (build/tuxmc.jar)
-# Env: TUXMC_INSTANCE (default 26.3), PRISM_DIR, TUXMC_CFLAGS (native lib flags)
+# Env: TUXMC_INSTANCE (default 26.3), PRISM_DIR, TUXMC_CFLAGS (native lib flags),
+#      TUXMC_MINGW (Windows cross compiler, default x86_64-w64-mingw32-gcc)
 set -euo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 P=${PRISM_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/PrismLauncher}
@@ -38,6 +39,15 @@ cp -r "$D/src/main/resources/." "$OUT/classes/"
 mkdir -p "$OUT/classes/natives/linux-x86_64"
 cc ${TUXMC_CFLAGS:--O2 -march=x86-64-v2} -fPIC -shared -Wall -Wextra \
     -o "$OUT/classes/natives/linux-x86_64/libtuxmc.so" "$D/native/capes.c" "$D/native/net.c" -lm
+# the same library for Windows, cross-compiled (needs mingw-w64)
+MINGW=${TUXMC_MINGW:-x86_64-w64-mingw32-gcc}
+if command -v "$MINGW" >/dev/null; then
+    mkdir -p "$OUT/classes/natives/windows-x86_64"
+    "$MINGW" -O2 -Wall -Wextra -shared -static-libgcc -o "$OUT/classes/natives/windows-x86_64/tuxmc.dll" \
+        "$D/native/capes.c" "$D/native/net_win.c" -liphlpapi -lws2_32 -lm
+else
+    echo "warning: no $MINGW, the jar has no Windows library (capes and the net map are off there)" >&2
+fi
 (cd "$OUT/classes" && jar --create --file "$OUT/tuxmc.jar" .)
 echo "built $OUT/tuxmc.jar"
 

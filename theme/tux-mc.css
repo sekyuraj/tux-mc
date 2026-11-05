@@ -129,3 +129,13 @@ button.mcl-skin:hover { background: ${surface}; transform: translateY(-2px); }
 .mcl-window switch:checked slider { background: ${bg}; }
 .mcl-window switch image { opacity: 0; }
 
+
+/* colours the launcher draws with (3D stage, background, progress): read from these */
+.palette .pal-fg { color: ${fg}; }
+.palette .pal-dim { color: ${subtext}; }
+.palette .pal-accent { color: ${accent_bright}; }
+.palette .pal-accent2 { color: ${accent}; }
+.palette .pal-warn { color: ${warn}; }
+.palette .pal-bg { color: ${bg_alt}; }
+.palette .pal-surface { color: ${surface}; }
+.palette .pal-bright { color: ${fg_bright}; }

@@ -110,6 +110,8 @@ public final class NetMonitor {
 
     /** fallback when libtuxmc couldn't load: parse `ss -tunpi` */
     private static List<Native.Conn> ss() throws Exception {
+        if (!Native.LINUX)
+            return new ArrayList<>();
         Process pr = new ProcessBuilder("ss", "-tunpiH").redirectErrorStream(true).start();
         List<Native.Conn> out = new ArrayList<>();
         String proto = null, ip = null;

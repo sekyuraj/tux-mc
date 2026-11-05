@@ -14,6 +14,7 @@
  * mc-configs.c; the client capes come from the mod's libtuxmc (capes.c).
  */
 #include "mc.h"
+#include "theme-black.h"
 #include "tuxmc.h"
 
 #include <curl/curl.h>
@@ -88,24 +89,9 @@ cairo_surface_t *mc_png_bytes(GBytes *bytes)
     return s;
 }
 
-static bool pgrep(const char *args)
-{
-    char *cmd = g_strdup_printf("pgrep %s", args);
-    int st = 1;
-    g_spawn_command_line_sync(cmd, NULL, NULL, &st, NULL);
-    g_free(cmd);
-    return g_spawn_check_wait_status(st, NULL);
-}
+bool mc_prism_running(void) { return mc_sys_prism_running(); }
 
-bool mc_prism_running(void) { return pgrep("-x prismlauncher"); }
-
-bool mc_game_running(app_t *a)
-{
-    char *args = g_strdup_printf("-f -- '-Djava.library.path=%s/natives'", a->instdir);
-    bool r = pgrep(args);
-    g_free(args);
-    return r;
-}
+bool mc_game_running(app_t *a) { return mc_sys_game_running(a->instdir); }
 
 void mc_open_path(app_t *a, const char *path)
 {
@@ -511,6 +497,14 @@ static cairo_surface_t *paint_tux_cape(app_t *a, const char *id, int s)
     if (tuxmc_cape_logo(id)) {
         char *f = g_strconcat(id, "-cape.png", NULL);
         char *p = g_build_filename(g_get_user_data_dir(), "tux-mc", "data", f, NULL);
+#ifdef _WIN32
+        if (!g_file_test(p, G_FILE_TEST_EXISTS)) {      /* next to the .exe: <root>\share\tux-mc\data */
+            char *root = g_win32_get_package_installation_directory_of_module(NULL);
+            g_free(p);
+            p = g_build_filename(root, "share", "tux-mc", "data", f, NULL);
+            g_free(root);
+        }
+#endif
         if (!g_file_test(p, G_FILE_TEST_EXISTS)) {
             g_free(p);
             p = g_build_filename(g_get_user_data_dir(), "tux-control-center", "data", f, NULL);
@@ -901,20 +895,15 @@ static void on_start(GtkButton *b, gpointer data)
         return;
     }
     /* settings go into instance.cfg; Prism must not hold it open */
-    if (mc_prism_running()) {
-        g_spawn_command_line_sync("pkill -x prismlauncher", NULL, NULL, NULL, NULL);
-        for (int i = 0; i < 30 && mc_prism_running(); i++)
-            g_usleep(100000);
-    }
+    if (mc_prism_running())
+        mc_sys_stop_prism();
     mc_settings_apply(a);
 
     struct stat st;
     a->log_seen = stat(a->log_path, &st) == 0 ? st.st_size : 0;
-    char *argv[] = {"prismlauncher", "--launch", a->instance, NULL};
+    const char *args[] = {"--launch", a->instance, NULL};
     GError *err = NULL;
-    if (!g_spawn_async(NULL, argv, NULL,
-                       G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
-                       NULL, &err)) {
+    if (!mc_sys_run_prism(args, &err)) {
         launch_failed(a, err->message);
         g_error_free(err);
         return;
@@ -1306,6 +1295,11 @@ static void on_startup(GApplication *app, gpointer data)
 {
     (void)app;
     app_t *a = data;
+    /* the black theme, built in: what the launcher looks like without a style.css */
+    GtkCssProvider *base = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(base, TUX_STYLE_CSS);
+    gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(base),
+                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     a->css = gtk_css_provider_new();
     load_css(a);
     gtk_style_context_add_provider_for_display(gdk_display_get_default(), GTK_STYLE_PROVIDER(a->css),
@@ -1318,12 +1312,9 @@ static void on_startup(GApplication *app, gpointer data)
     g_object_unref(f);
     g_free(path);
 
-    a->prism = g_build_filename(g_get_user_data_dir(), "PrismLauncher", NULL);
     const char *inst = g_getenv("TUX_MC_INSTANCE");
     a->instance = g_strdup(inst ? inst : "26.3");
-    a->instdir = g_build_filename(a->prism, "instances", a->instance, NULL);
-    a->mcdir = g_build_filename(a->instdir, "minecraft", NULL);
-    a->log_path = g_build_filename(a->mcdir, "logs", "latest.log", NULL);
+    mc_paths(a);
     mc_load_account(a);
     load_tux_cape(a);
     mc3d_init(&a->view);
@@ -1332,12 +1323,41 @@ static void on_startup(GApplication *app, gpointer data)
     a->view.slim = a->slim;
 }
 
+/* Prism's folders; again after setup, when Prism may have just been installed */
+void mc_paths(app_t *a)
+{
+    g_free(a->prism);
+    g_free(a->instdir);
+    g_free(a->mcdir);
+    g_free(a->log_path);
+    a->prism = mc_sys_prism_dir();
+    a->instdir = g_build_filename(a->prism, "instances", a->instance, NULL);
+    a->mcdir = g_build_filename(a->instdir, "minecraft", NULL);
+    a->log_path = g_build_filename(a->mcdir, "logs", "latest.log", NULL);
+}
+
+/* the setup screen is done: load the account it signed in and show the launcher */
+void mc_open_main(app_t *a)
+{
+    mc_paths(a);
+    mc_load_account(a);
+    load_tux_cape(a);
+    a->view.skin = a->skin;
+    a->view.slim = a->slim;
+    build_window(a);
+    gtk_window_present(a->win);
+}
+
 static void on_activate(GApplication *app, gpointer data)
 {
     (void)app;
     app_t *a = data;
     if (a->win) {
         gtk_window_present(a->win);
+        return;
+    }
+    if (mc_setup_needed(a)) {            /* no Prism, no account or no instance yet */
+        mc_setup_show(a);
         return;
     }
     build_window(a);

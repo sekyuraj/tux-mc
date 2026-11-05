@@ -1,0 +1,55 @@
+# Builds the Windows launcher with MSYS2 and packs tux-mc-windows.zip.
+# On every push it's an artifact of the run; when a release is published, the
+# zip is attached to that release.
+name: windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make zip gettext
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-json-glib
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+
+      - name: Build the launcher
+        run: make -C launcher
+
+      - name: Pack tux-mc-windows.zip
+        run: bash windows/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tux-mc-windows
+          path: dist/tux-mc-windows.zip
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/tux-mc-windows.zip --clobber

@@ -28,7 +28,10 @@ public final class Notify {
         });
     }
 
+    /** desktop notification; Linux only (notify-send), on Windows the in-game toast and sound stay */
     public static void desktop(String title, String body) {
+        if (!Native.LINUX)
+            return;
         try {
             new ProcessBuilder("notify-send", "-a", "Minecraft", "-i", "minecraft", title, body == null ? "" : body)
                     .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();

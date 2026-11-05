@@ -2,3 +2,5 @@ mod/build/
 mod/lib/
 launcher/tux-mc
 launcher/tux-mc.desktop
+dist/
+launcher/tux-mc.exe

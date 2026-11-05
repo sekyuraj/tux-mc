@@ -1207,18 +1207,7 @@ static void ini_set(GString *s, const char *key, const char *val)
     g_free(pre);
 }
 
-static int total_ram_gb(void)
-{
-    char *txt = NULL;
-    long kb = 0;
-    if (g_file_get_contents("/proc/meminfo", &txt, NULL, NULL)) {
-        char *m = strstr(txt, "MemTotal:");
-        if (m)
-            kb = atol(m + 9);
-        g_free(txt);
-    }
-    return kb > 0 ? (int)MAX(2, kb / (1024 * 1024)) : 16;
-}
+static int total_ram_gb(void) { return mc_sys_ram_gb(); }
 
 void mc_settings_apply(app_t *a)
 {
@@ -1240,30 +1229,36 @@ void mc_settings_apply(app_t *a)
     ini_set(s, "MinMemAlloc", buf);
 
     char *extra = mc_cfg_str("jvm_args", "");
-    char *jvm = g_strdup_printf("%s %s", mc_cfg_bool("zgc", true)
-        ? "-XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+UseTransparentHugePages -XX:+PerfDisableSharedMem"
-        : "-XX:+UseG1GC -XX:+UseCompactObjectHeaders -XX:+PerfDisableSharedMem", extra);
+    /* UseTransparentHugePages only exists on Linux: java won't start with it elsewhere */
+    char *jvm = g_strdup_printf("%s%s %s", mc_cfg_bool("zgc", true)
+        ? "-XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+PerfDisableSharedMem"
+        : "-XX:+UseG1GC -XX:+UseCompactObjectHeaders -XX:+PerfDisableSharedMem",
+        MC_LINUX && mc_cfg_bool("zgc", true) ? " -XX:+UseTransparentHugePages" : "", extra);
     ini_set(s, "OverrideJavaArgs", "true");
     ini_set(s, "JvmArgs", g_strstrip(jvm));
     g_free(jvm);
     g_free(extra);
 
-    GString *w = g_string_new("env");
-    if (mc_cfg_bool("wayland", true))
+    /* the wrapper: `env VAR=… gamemoderun …` on Linux; Windows has no env,
+     * so there only your own wrapper (if any) goes in */
+    GString *w = g_string_new(MC_LINUX ? "env" : "");
+    if (!MC_LINUX)
+        ;
+    else if (mc_cfg_bool("wayland", true))
         g_string_append(w, " SDL_VIDEO_DRIVER=wayland");
-    if (mc_cfg_bool("glthread", true))
+    if (MC_LINUX && mc_cfg_bool("glthread", true))
         g_string_append(w, " mesa_glthread=true");
     char *env = mc_cfg_str("env", "");
-    if (*g_strstrip(env))
+    if (MC_LINUX && *g_strstrip(env))
         g_string_append_printf(w, " %s", env);
     g_free(env);
-    if (mc_cfg_bool("gamemode", true) && g_find_program_in_path("gamemoderun"))
+    if (MC_LINUX && mc_cfg_bool("gamemode", true) && g_find_program_in_path("gamemoderun"))
         g_string_append(w, " gamemoderun");
     char *wrap = mc_cfg_str("wrapper", "");
     if (*g_strstrip(wrap))
-        g_string_append_printf(w, " %s", wrap);
+        g_string_append_printf(w, "%s%s", w->len ? " " : "", wrap);
     g_free(wrap);
-    ini_set(s, "OverrideCommands", "true");
+    ini_set(s, "OverrideCommands", w->len ? "true" : "false");
     ini_set(s, "WrapperCommand", w->str);
     g_string_free(w, TRUE);
 
@@ -1427,8 +1422,8 @@ static void on_open_prism(GtkButton *b, gpointer d)
 {
     (void)b;
     (void)d;
-    char *argv[] = {"prismlauncher", "--show-window", NULL};
-    g_spawn_async(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+    const char *args[] = {"--show-window", NULL};
+    mc_sys_run_prism(args, NULL);
 }
 
 static void on_open_inst(GtkButton *b, gpointer data)
@@ -1507,19 +1502,23 @@ GtkWidget *mc_page_settings(app_t *a)
 
     /* speed + java */
     GtkWidget *speed = mc_card("Speed", "None of these lower the picture quality.");
-    a->set_glthread = set_row(a, speed, "glthread", true, "GPU threading",
-                              "mesa_glthread: OpenGL work on its own thread (Mesa drivers only)");
-    a->set_gamemode = set_row(a, speed, "gamemode", true, "Gamemode",
-                              "performance CPU governor while playing (needs gamemoderun)");
+    if (MC_LINUX) {                      /* Mesa, gamemode and Wayland are Linux things */
+        a->set_glthread = set_row(a, speed, "glthread", true, "GPU threading",
+                                  "mesa_glthread: OpenGL work on its own thread (Mesa drivers only)");
+        a->set_gamemode = set_row(a, speed, "gamemode", true, "Gamemode",
+                                  "performance CPU governor while playing (needs gamemoderun)");
+    }
     a->set_zgc = set_row(a, speed, "zgc", true, "Low-pause garbage collector",
                          "ZGC: no stutter when Java cleans up memory. Off = G1");
-    a->set_wayland = set_row(a, speed, "wayland", true, "Native Wayland",
-                             "run without XWayland (SDL_VIDEO_DRIVER=wayland)");
+    if (MC_LINUX)
+        a->set_wayland = set_row(a, speed, "wayland", true, "Native Wayland",
+                                 "run without XWayland (SDL_VIDEO_DRIVER=wayland)");
     gtk_box_append(GTK_BOX(c2), speed);
 
     GtkWidget *adv = mc_card("Advanced", "Added to what the switches above set.");
     entry_row(a, adv, "jvm_args", "Java arguments", NULL, "-Dfoo=bar -XX:…");
-    entry_row(a, adv, "env", "Environment", NULL, "VAR=value VAR2=value");
+    if (MC_LINUX)
+        entry_row(a, adv, "env", "Environment", NULL, "VAR=value VAR2=value");
     entry_row(a, adv, "wrapper", "Wrapper command", "runs the game through it, e.g. mangohud", "mangohud");
     gtk_box_append(GTK_BOX(c2), adv);
 

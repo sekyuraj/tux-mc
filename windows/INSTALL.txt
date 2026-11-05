@@ -1,0 +1,72 @@
+tux-mc on Windows
+=================
+
+What you need
+-------------
+- Windows 10 or 11, 64-bit
+- A Microsoft account that owns Minecraft: Java Edition
+- About 1 GB free for Prism, Java and Minecraft
+
+You don't need to install Prism Launcher or Java yourself. The installer gets
+Prism, and Prism downloads the right Java the first time you play.
+
+
+Installing
+----------
+1. Unzip tux-mc-windows.zip anywhere, for example into Downloads.
+   (Right-click the zip, "Extract All...". Don't run it from inside the zip.)
+
+2. Open the tux-mc-windows folder and double-click install.bat.
+
+   If Windows shows "Windows protected your PC", click "More info", then
+   "Run anyway". That warning appears for any download that isn't signed.
+
+3. A console window shows what it does:
+   - copies the launcher to %LOCALAPPDATA%\Programs\tux-mc and makes
+     shortcuts in the Start menu and on the desktop
+   - downloads Prism Launcher if you don't have it (into %LOCALAPPDATA%\tux-mc\prism)
+   - creates the Minecraft 26.3 instance with Fabric
+   - downloads Fabric API and the tuxmc mod
+   - makes Prism black, like the launcher
+
+4. If you aren't signed in to Prism yet, Prism opens. Click
+   "Add Microsoft account", sign in in the browser window that opens, and come
+   back. The installer notices by itself and carries on.
+   (No "Add Microsoft account" button? Click Accounts at the top right, then
+   Manage Accounts, then Add Microsoft.)
+
+5. Press Enter to start tux-mc, or start it later from the Start menu.
+
+
+The first start
+---------------
+Press START. The first time takes a few minutes: Prism downloads Minecraft and
+Java. After that it's quick.
+
+If something is missing when tux-mc starts (Prism, the account or the
+instance), it shows a setup screen with a SET UP button that fixes it, so you
+can also skip install.bat and just run tux-mc\bin\tux-mc.exe.
+
+
+Updating
+--------
+Download the new tux-mc-windows.zip and run install.bat again. Your worlds,
+settings and account stay.
+
+
+Removing
+--------
+Delete these folders and the two shortcuts:
+  %LOCALAPPDATA%\Programs\tux-mc     the launcher
+  %LOCALAPPDATA%\tux-mc              Prism (if tux-mc installed it), settings
+  %APPDATA%\PrismLauncher            Prism's data, worlds included (only if you
+                                     don't use Prism for anything else)
+(Paste a path into the Explorer address bar to open it.)
+
+
+Differences from Linux
+----------------------
+- The network map shows your connections but not how much data goes through
+  them (Windows only gives that to admin programs).
+- Desktop notifications are off; alerts still show in game, with a sound.
+- The Linux-only speed settings (GPU threading, gamemode, Wayland) aren't there.

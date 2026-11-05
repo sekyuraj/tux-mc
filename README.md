@@ -1,21 +1,26 @@
 # tux-mc
 
-A Minecraft 26.3 client in two parts:
+A Minecraft 26.3 client for Linux and Windows, in two parts:
 
 - **tuxmc**, a Fabric mod with a menu on Right Shift: network map, server tools, waypoints, emotes, capes, zoom, fullbright and a HUD.
 - **tux-mc**, a GTK4 launcher written in C. [Prism Launcher](https://prismlauncher.org) does the real work behind it (accounts, downloads, starting the game).
 
 The launcher and Prism both come with a black theme.
 
-## Needs
+## Windows
 
-- **Prism Launcher**, signed in to your Microsoft account. tux-mc uses Prism's account and instance.
-- Linux on x86-64. The mod has a small native library for capes and the network map.
+Download `tux-mc-windows.zip` from the [latest release](https://github.com/sekyuraj/tux-mc/releases/latest), unzip it and double-click `install.bat`. It installs Prism Launcher too if you don't have it, sets everything up and walks you through signing in. The step-by-step guide is [windows/INSTALL.txt](windows/INSTALL.txt), and the same file is in the zip.
+
+## Linux
+
+What you need:
+
+- Linux on x86-64, and a Microsoft account that owns Minecraft: Java Edition.
 - To build the launcher: a C compiler, `pkg-config`, and the development packages for gtk4, json-glib and libcurl.
 - `curl` and `envsubst` (from gettext).
 - Building the mod yourself also needs JDK 25 (`javac`).
 
-## Install
+[Prism Launcher](https://prismlauncher.org) is needed too, but you don't have to install it first. If it's missing, the installer gets it.
 
 ```sh
 git clone https://github.com/sekyuraj/tux-mc
@@ -23,15 +28,18 @@ cd tux-mc
 ./install.sh
 ```
 
-This does the following:
+The installer sets up whatever is missing:
 
-1. Creates a Prism instance called `26.3` with Fabric Loader, unless you already have one.
-2. Downloads Fabric API from Modrinth and checks its sha512.
-3. Downloads `tuxmc.jar` from the latest release.
-4. Builds the launcher and installs it into `~/.local/bin`, along with a desktop entry.
-5. Renders the black theme for the launcher and for Prism.
+1. **Prism Launcher**, if you don't have it: its AppImage, unpacked into `~/.local/share/tux-mc/prism` (so FUSE isn't needed), with a `prismlauncher` command in `~/.local/bin`. Prism is set to download the right Java by itself.
+2. A Prism instance called `26.3` with Fabric Loader.
+3. Fabric API from Modrinth (sha512-checked) and `tuxmc.jar` from the latest release.
+4. The launcher, in `~/.local/bin`, with a desktop entry.
+5. The black theme for the launcher and for Prism.
+6. **Your Microsoft account**: if Prism has none, Prism opens. Click "Add Microsoft account" and sign in. The installer waits until you're done.
 
 Run `tux-mc`, or "Minecraft (tux-mc)" from your app menu.
+
+The launcher checks the same things every time it starts. If Prism, the account or the instance is missing, it shows a setup screen whose SET UP button fixes it, on Linux and on Windows.
 
 Options:
 
@@ -99,6 +107,8 @@ make -C launcher install   # PREFIX=~/.local by default
 ```
 
 Minecraft 26.x ships unobfuscated, so the mod builds with plain `javac` against Prism's libraries. No Gradle or Loom needed.
+
+`mod/build.sh` also cross-compiles the Windows version of the native library when `x86_64-w64-mingw32-gcc` is installed, so one jar works on both systems. The Windows launcher is built in MSYS2 (UCRT64) with `make -C launcher` and packed by `windows/package.sh`. GitHub Actions does both for every release.
 
 ## Credits
 

@@ -24,10 +24,12 @@ import net.fabricmc.loader.api.FabricLoader;
 
 /**
  * libtuxmc (native/ in the source tree): cape painting and the socket list,
- * called through Java's FFM API. The .so ships inside the jar and is copied
- * to config/tuxmc/ on first use.
+ * called through Java's FFM API. The jar carries a Linux .so and a Windows .dll;
+ * the right one is copied to config/tuxmc/ on first use.
  */
 public final class Native {
+    public static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase().startsWith("windows");
+    public static final boolean LINUX = System.getProperty("os.name", "").toLowerCase().startsWith("linux");
     public static final boolean OK;
     private static MethodHandle cape, net;
 
@@ -36,17 +38,24 @@ public final class Native {
         try {
             Path dir = FabricLoader.getInstance().getConfigDir().resolve("tuxmc");
             Files.createDirectories(dir);
-            Path lib = dir.resolve("libtuxmc.so");
+            String file = WINDOWS ? "tuxmc.dll" : "libtuxmc.so";
+            String res = WINDOWS ? "/natives/windows-x86_64/tuxmc.dll" : "/natives/linux-x86_64/libtuxmc.so";
+            Path lib = dir.resolve(file);
             byte[] want;
-            try (var in = Native.class.getResourceAsStream("/natives/linux-x86_64/libtuxmc.so")) {
+            try (var in = Native.class.getResourceAsStream(res)) {
                 if (in == null)
-                    throw new IllegalStateException("no libtuxmc.so in the jar");
+                    throw new IllegalStateException("no " + res + " in the jar");
                 want = in.readAllBytes();
             }
             if (!Files.exists(lib) || !Arrays.equals(Files.readAllBytes(lib), want)) {
-                Path tmp = Files.createTempFile(dir, "libtuxmc", ".so");
+                Path tmp = Files.createTempFile(dir, "tuxmc", WINDOWS ? ".dll" : ".so");
                 Files.write(tmp, want);
-                Files.move(tmp, lib, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                try {
+                    Files.move(tmp, lib, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (Exception e) {
+                    /* Windows: a second game still has the old one loaded; use the fresh copy */
+                    lib = tmp;
+                }
             }
             SymbolLookup l = SymbolLookup.libraryLookup(lib, Arena.global());
             Linker ln = Linker.nativeLinker();

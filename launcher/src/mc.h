@@ -97,6 +97,27 @@ void mc_status(app_t *a, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
 void mc_pal(app_t *a, int i, GdkRGBA *c);
 cairo_surface_t *mc_png_bytes(GBytes *b);
 bool mc_prism_running(void);
+
+/* mc-sys.c: what differs between Linux and Windows */
+#ifdef _WIN32
+#define MC_LINUX 0
+#else
+#define MC_LINUX 1
+#endif
+char *mc_sys_own_prism_dir(void);
+char *mc_sys_prism_exe(void);
+char *mc_sys_prism_dir(void);
+bool mc_sys_prism_running(void);
+void mc_sys_stop_prism(void);
+bool mc_sys_game_running(const char *instdir);
+int mc_sys_ram_gb(void);
+bool mc_sys_run_prism(const char *const *args, GError **err);
+
+/* mc-setup.c: first run without Prism, an account or the instance */
+bool mc_setup_needed(app_t *a);
+void mc_setup_show(app_t *a);
+void mc_paths(app_t *a);
+void mc_open_main(app_t *a);
 bool mc_game_running(app_t *a);
 /* open a folder or file in the default app (no portal: it can't open folders here) */
 void mc_open_path(app_t *a, const char *path);
@@ -117,6 +138,7 @@ void mc_cfg_set_str(const char *key, const char *v);
 /* mc-net.c: blocking, call from threads (GTask) */
 long mc_http(const char *method, const char *url, const char *token, const char *ctype, const char *body,
              GByteArray *out);
+bool mc_http_download(const char *url, const char *path, char **err);
 long mc_http_upload_skin(const char *token, const char *variant, const char *path, GByteArray *out);
 /* a fresh Minecraft token (refreshing through Xbox if needed); NULL on failure. Blocking. */
 char *mc_auth_token(app_t *a, char **err);
