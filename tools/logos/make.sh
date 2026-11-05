@@ -2,7 +2,7 @@
 # Rebuilds the cape logos from the vector sources in src/ at 1024 px and puts
 # them where the mod (assets/tuxmc/<id>.png) and the launcher (data/<id>-cape.png)
 # look. Needs rsvg-convert and gdk-pixbuf. Gentoo, SteamOS and CRUX only
-# exist as pictures and are left as they are.
+# exist as pictures and are left as they are; LFS comes from src/lfs-logo.png.
 #   tools/logos/make.sh            rebuild
 #   tools/logos/make.sh --sheet    rebuild, then write sheet.png to look at
 set -euo pipefail
@@ -28,7 +28,13 @@ svg archlinux; make_logo arch archlinux color 1793D1
 svg debian;    make_logo debian debian color D70A53
 svg freebsd;   make_logo freebsd freebsd color EB0028 erase 1869 0 179 358   # without the ®
 svg mint;      make_logo mint mint
-rsvg-convert -w 2048 -h 2048 "$D/src/lfs.svg" -o "$B/lfs.png"; make_logo lfs lfs
+# the real LFS logo (from linuxfromscratch.org, CC0 on Wikimedia Commons). Only
+# 192x75 exists, so it stays at its own size; its background is white, and so is the cape
+cp "$D/src/lfs-logo.png" "$B/lfs.png"
+"$B/logoprep" "$B/lfs.png" "$B/out-lfs.png" 192 pad FFFFFF
+cp "$B/out-lfs.png" "$R/mod/src/main/resources/assets/tuxmc/lfs.png"
+cp "$B/out-lfs.png" "$R/launcher/data/lfs-cape.png"
+echo "  lfs"
 
 if [[ ${1:-} == --sheet ]]; then
     cc -O2 -I"$R/mod/native" -o "$B/sheet" "$D/sheet.c" "$R/mod/native/capes.c" \

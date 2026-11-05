@@ -5,6 +5,8 @@
  *   erase X Y W H        make a rectangle transparent (a ® mark, say)
  *   fillin RRGGBB        fill the inside of a line drawing: transparent pixels
  *                        that can't be reached from the border get the colour
+ *   pad RRGGBB           colour of the transparent padding (default black); match
+ *                        a logo's own background, or its edge blends into grey
  * then the image is fitted into SIZE x SIZE, centred, on transparency.
  * Build: cc -O2 -o logoprep logoprep.c $(pkg-config --cflags --libs gdk-pixbuf-2.0) */
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -60,6 +62,7 @@ int main(int c, char **v)
     if (!gdk_pixbuf_get_has_alpha(p))
         p = gdk_pixbuf_add_alpha(p, FALSE, 0, 0, 0);
     int size = atoi(v[3]);
+    guint32 pad = 0;
     for (int i = 4; i < c; i++) {
         int W = gdk_pixbuf_get_width(p), H = gdk_pixbuf_get_height(p), rs = gdk_pixbuf_get_rowstride(p);
         guchar *px = gdk_pixbuf_get_pixels(p);
@@ -78,6 +81,8 @@ int main(int c, char **v)
                 for (int x = x0; x < x0 + w && x < W; x++)
                     px[y * rs + x * 4 + 3] = 0;
             i += 4;
+        } else if (!strcmp(v[i], "pad") && i + 1 < c) {
+            pad = (guint32)strtol(v[++i], NULL, 16) << 8;   /* RRGGBB, alpha 0 */
         } else if (!strcmp(v[i], "fillin") && i + 1 < c) {
             fillin(p, strtol(v[++i], NULL, 16));
         }
@@ -87,7 +92,7 @@ int main(int c, char **v)
     int nw = (int)(w * k + 0.5), nh = (int)(h * k + 0.5);
     GdkPixbuf *s = gdk_pixbuf_scale_simple(p, nw, nh, GDK_INTERP_HYPER);
     GdkPixbuf *out = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, size, size);
-    gdk_pixbuf_fill(out, 0);
+    gdk_pixbuf_fill(out, pad);
     gdk_pixbuf_copy_area(s, 0, 0, nw, nh, out, (size - nw) / 2, (size - nh) / 2);
     return gdk_pixbuf_save(out, v[2], "png", NULL, NULL) ? 0 : 3;
 }
