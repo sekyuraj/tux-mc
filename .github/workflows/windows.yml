@@ -61,14 +61,20 @@ jobs:
           Get-ChildItem (Join-Path $prism 'instances\26.3\minecraft\mods') | Select-Object Name, Length
           Get-Content (Join-Path $prism 'prismlauncher.cfg')
 
+      # the launcher's updater checks downloads against this
+      - name: Checksum
+        run: cd dist && sha256sum tux-mc-windows.zip | cut -d' ' -f1 > tux-mc-windows.zip.sha256
+
       - uses: actions/upload-artifact@v4
         with:
           name: tux-mc-windows
-          path: dist/tux-mc-windows.zip
+          path: |
+            dist/tux-mc-windows.zip
+            dist/tux-mc-windows.zip.sha256
 
       - name: Attach to the release
         if: github.event_name == 'release'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/tux-mc-windows.zip --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/tux-mc-windows.zip dist/tux-mc-windows.zip.sha256 --clobber

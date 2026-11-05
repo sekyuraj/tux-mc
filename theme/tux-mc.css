@@ -123,6 +123,7 @@ button.mcl-skin { padding: 8px; border-radius: 12px; background: alpha(${bg}, 0.
 button.mcl-skin:hover { background: ${surface}; transform: translateY(-2px); }
 .mcl-skin-name { font-size: 11px; color: ${subtext}; }
 .mcl-setrow { padding: 6px 0; }
+button.mcl-danger { color: ${urgent}; border-color: ${urgent}; }
 .mcl-window switch { min-width: 44px; min-height: 22px; border-radius: 99px; background: ${surface}; border: 1px solid ${muted}; transition: all 200ms ease; }
 .mcl-window switch:checked { background: ${accent}; border-color: ${accent_bright}; }
 .mcl-window switch slider { min-width: 18px; min-height: 18px; margin: 1px; border-radius: 99px; background: ${fg_bright}; border: none; box-shadow: 0 1px 3px alpha(black, 0.4); }

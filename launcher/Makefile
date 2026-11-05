@@ -5,7 +5,10 @@ CFLAGS  += -std=gnu11 -Wall -Wextra
 PREFIX  ?= $(HOME)/.local
 NATIVE  := ../mod/native
 PKGS    := gtk4 json-glib-1.0 libcurl
+VERSION := $(shell cat ../VERSION 2>/dev/null || echo 0.0.0)
+CFLAGS  += -DTUX_MC_VERSION='"$(VERSION)"'
 SRC     := src/mc.c src/mc-net.c src/mc-pages.c src/mc-configs.c src/mc3d.c src/mc-sys.c src/mc-setup.c \
+           src/mc-instances.c src/mc-update.c \
            $(NATIVE)/capes.c
 
 # MSYS2 (UCRT64) on Windows: a GUI .exe, no console window
@@ -19,7 +22,7 @@ endif
 
 all: $(EXE)
 
-$(EXE): $(SRC) src/mc.h src/mc3d.h $(NATIVE)/tuxmc.h
+$(EXE): $(SRC) src/mc.h src/mc3d.h $(NATIVE)/tuxmc.h ../VERSION
 	$(CC) $(CFLAGS) -I$(NATIVE) -o $@ $(SRC) $$(pkg-config --cflags --libs $(PKGS)) -lm $(LDEXTRA)
 
 install: tux-mc

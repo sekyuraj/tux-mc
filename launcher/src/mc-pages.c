@@ -880,8 +880,10 @@ static void search_thread(GTask *t, gpointer s, gpointer data, GCancellable *c)
     (void)c;
     search_t *q = data;
     char *esc = g_uri_escape_string(q->query, NULL, FALSE);
-    char *facets = g_uri_escape_string("[[\"versions:26.3\"],[\"categories:fabric\"],[\"project_type:mod\"]]", NULL,
-                                       FALSE);
+    char *f = g_strdup_printf("[[\"versions:%s\"],[\"categories:%s\"],[\"project_type:mod\"]]",
+                              q->a->mc_version ? q->a->mc_version : "", mc_loader_slug(q->a));
+    char *facets = g_uri_escape_string(f, NULL, FALSE);
+    g_free(f);
     char *url = g_strdup_printf("https://api.modrinth.com/v2/search?query=%s&facets=%s&limit=25", esc, facets);
     g_free(esc);
     g_free(facets);
@@ -919,12 +921,17 @@ static void search_thread(GTask *t, gpointer s, gpointer data, GCancellable *c)
 
 typedef struct { app_t *a; char *id, *title, *err; int installed; } inst_t;
 
-/* latest Fabric 26.3 file of a project, plus its required dependencies */
+/* the newest file of a project for this instance's version and loader, plus
+ * its required dependencies */
 static void install_project(inst_t *in, const char *id, int depth)
 {
     if (depth > 4)
         return;
-    char *loaders = g_uri_escape_string("[\"fabric\"]", NULL, FALSE), *gv = g_uri_escape_string("[\"26.3\"]", NULL, FALSE);
+    char *ls = g_strdup_printf("[\"%s\"]", mc_loader_slug(in->a)),
+         *vs_ = g_strdup_printf("[\"%s\"]", in->a->mc_version ? in->a->mc_version : "");
+    char *loaders = g_uri_escape_string(ls, NULL, FALSE), *gv = g_uri_escape_string(vs_, NULL, FALSE);
+    g_free(ls);
+    g_free(vs_);
     char *url = g_strdup_printf("https://api.modrinth.com/v2/project/%s/version?loaders=%s&game_versions=%s", id,
                                 loaders, gv);
     g_free(loaders);
@@ -941,7 +948,7 @@ static void install_project(inst_t *in, const char *id, int depth)
     JsonArray *vs = json_node_get_array(json_parser_get_root(p));
     if (!vs || !json_array_get_length(vs)) {
         if (!in->err)
-            in->err = g_strdup("no version for 26.3 + Fabric");
+            in->err = g_strdup_printf("no version for %s + %s", in->a->mc_version, mc_loader_name(in->a->loader));
         goto out;
     }
     JsonObject *v = json_array_get_object_element(vs, 0);
@@ -1072,7 +1079,7 @@ static void search_done(GObject *s, GAsyncResult *r, gpointer data)
         gtk_list_box_append(GTK_LIST_BOX(a->mr_list), row);
     }
     if (!q->hits->len)
-        mc_status(a, "Nothing on Modrinth for “%s” (26.3, Fabric)", q->query);
+        mc_status(a, "Nothing on Modrinth for “%s” (%s, %s)", q->query, a->mc_version, mc_loader_name(a->loader));
     g_ptr_array_unref(q->hits);
     g_free(q->query);
     g_free(q);
@@ -1160,7 +1167,10 @@ GtkWidget *mc_page_mods(app_t *a)
     GtkWidget *br = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     GtkWidget *sr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     a->mr_entry = gtk_search_entry_new();
-    gtk_search_entry_set_placeholder_text(GTK_SEARCH_ENTRY(a->mr_entry), "search Modrinth (26.3, Fabric), Enter");
+    char *ph = g_strdup_printf("search Modrinth (%s, %s), Enter", a->mc_version ? a->mc_version : "?",
+                               mc_loader_name(a->loader));
+    gtk_search_entry_set_placeholder_text(GTK_SEARCH_ENTRY(a->mr_entry), ph);
+    g_free(ph);
     gtk_widget_set_hexpand(a->mr_entry, TRUE);
     g_signal_connect(a->mr_entry, "activate", G_CALLBACK(on_mr_search), a);
     gtk_box_append(GTK_BOX(sr), a->mr_entry);
@@ -1523,6 +1533,7 @@ GtkWidget *mc_page_settings(app_t *a)
     gtk_box_append(GTK_BOX(c2), adv);
 
     /* launcher */
+    gtk_box_append(GTK_BOX(c3), mc_update_card(a));
     GtkWidget *beh = mc_card("Launcher", NULL);
     a->set_close = set_row(a, beh, "close_on_start", true, "Close when the game is up", NULL);
     set_row(a, beh, "console", false, "Prism console", "show Prism's log window while playing");

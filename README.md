@@ -81,12 +81,14 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 ## The launcher
 
 - Full screen over your wallpaper, with a 3D model of your player.
+- **Instances**: every Prism instance, and which one Start plays. Make new ones with any Minecraft version (snapshots too) and Vanilla, Fabric, Quilt, NeoForge or Forge. Fabric API is added for you if you want it. Prism downloads the game the first time you start a new instance.
 - **Capes**: switches your official Mojang cape and shows the client capes on the model.
 - **Skins**: upload a skin, keep a library of them, or copy one from a player by name.
 - **Mods**: list, turn on and off, delete, drop in jars, and search and install from Modrinth.
 - **Configs**: an editor for mod configs.
 - **Settings**: RAM, JVM arguments, environment, wrapper command, and window size.
-- Ctrl+1..5 switches pages.
+- **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
+- Ctrl+1..6 switches pages.
 
 ## Themes
 
@@ -109,6 +111,8 @@ make -C launcher install   # PREFIX=~/.local by default
 Minecraft 26.x ships unobfuscated, so the mod builds with plain `javac` against Prism's libraries. No Gradle or Loom needed.
 
 `mod/build.sh` also cross-compiles the Windows version of the native library when `x86_64-w64-mingw32-gcc` is installed, so one jar works on both systems. The Windows launcher is built in MSYS2 (UCRT64) with `make -C launcher` and packed by `windows/package.sh`. GitHub Actions does both for every release.
+
+To release, bump `VERSION` and the version in `mod/src/main/resources/fabric.mod.json`, commit, and run `tools/release.sh`. It builds the mod, uploads `tuxmc.jar` and its checksum, and publishes the release. The `linux` and `windows` workflows then attach the launcher builds (`linux/package.sh`, `windows/package.sh`). That's what the updater downloads.
 
 ## Credits
 

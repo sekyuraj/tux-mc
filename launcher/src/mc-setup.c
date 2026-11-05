@@ -85,7 +85,10 @@ static bool have_instance(app_t *a)
 {
     char *pack = g_build_filename(a->instdir, "mmc-pack.json", NULL);
     char *mods = g_build_filename(a->mcdir, "mods", NULL);
-    bool ok = g_file_test(pack, G_FILE_TEST_EXISTS) && has_jar(mods, "fabric-api") && has_jar(mods, "tuxmc");
+    /* the 26.3 instance setup makes needs Fabric API and tuxmc; one picked on
+     * the Instances page just has to be there */
+    bool ok = g_file_test(pack, G_FILE_TEST_EXISTS) &&
+              (strcmp(a->instance, MC_VERSION) || (has_jar(mods, "fabric-api") && has_jar(mods, "tuxmc")));
     g_free(pack);
     g_free(mods);
     return ok;
@@ -301,14 +304,20 @@ static void prism_settings(app_t *a)
     g_free(path);
 }
 
-static bool fabric_api(const char *mods, char **err)
+/* the newest Fabric API for Minecraft mc into mods (sha512-checked); the
+ * Instances page uses it for new instances too */
+bool mc_fabric_api(const char *mods, const char *mc, char **err)
 {
     if (has_jar(mods, "fabric-api"))
         return true;
     say_bg("Downloading Fabric API…");
     JsonNode *root;
-    JsonParser *p = get_json("https://api.modrinth.com/v2/project/fabric-api/version?loaders=%5B%22fabric%22%5D"
-                             "&game_versions=%5B%22" MC_VERSION "%22%5D", &root);
+    char *esc = g_uri_escape_string(mc, NULL, FALSE);
+    char *q = g_strdup_printf("https://api.modrinth.com/v2/project/fabric-api/version?loaders=%%5B%%22fabric%%22%%5D"
+                              "&game_versions=%%5B%%22%s%%22%%5D", esc);
+    JsonParser *p = get_json(q, &root);
+    g_free(q);
+    g_free(esc);
     JsonArray *vs = root && JSON_NODE_HOLDS_ARRAY(root) ? json_node_get_array(root) : NULL;
     JsonObject *file = NULL;
     if (vs && json_array_get_length(vs)) {
@@ -321,7 +330,7 @@ static bool fabric_api(const char *mods, char **err)
     }
     if (!file) {
         g_object_unref(p);
-        *err = g_strdup("no Fabric API for " MC_VERSION " on Modrinth");
+        *err = g_strdup_printf("no Fabric API for %s on Modrinth", mc);
         return false;
     }
     const char *url = json_object_get_string_member(file, "url");
@@ -366,7 +375,7 @@ static bool make_instance(app_t *a, char **err)
         g_file_set_contents(pack, PACK, -1, NULL);
     g_free(pack);
 
-    bool ok = fabric_api(mods, err);
+    bool ok = mc_fabric_api(mods, MC_VERSION, err);
     if (ok && !has_jar(mods, "tuxmc")) {
         say_bg("Downloading tuxmc…");
         char *jar = g_build_filename(mods, "tuxmc.jar", NULL);

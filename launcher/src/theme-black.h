@@ -128,6 +128,7 @@ static const char TUX_STYLE_CSS[] =
     "button.mcl-skin:hover { background: #1a1a1a; transform: translateY(-2px); }\n"
     ".mcl-skin-name { font-size: 11px; color: #a6a6a6; }\n"
     ".mcl-setrow { padding: 6px 0; }\n"
+    "button.mcl-danger { color: #ffffff; border-color: #ffffff; }\n"
     ".mcl-window switch { min-width: 44px; min-height: 22px; border-radius: 99px; background: #1a1a1a; border: 1px solid #4a4a4a; transition: all 200ms ease; }\n"
     ".mcl-window switch:checked { background: #ffffff; border-color: #ffffff; }\n"
     ".mcl-window switch slider { min-width: 18px; min-height: 18px; margin: 1px; border-radius: 99px; background: #ffffff; border: none; box-shadow: 0 1px 3px alpha(black, 0.4); }\n"

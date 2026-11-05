@@ -20,6 +20,7 @@
 #include <curl/curl.h>
 #include <math.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -988,8 +989,11 @@ GtkWidget *mc_page_home(app_t *a)
     char *played = instance_value(a, "totalTimePlayed");
     long secs = played ? atol(played) : 0;
     g_free(played);
-    char *sub = g_strdup_printf("%s  ·  Fabric  ·  %d mods  ·  %ldh %02ldm played", a->instance, count_mods(a),
+    char *name = instance_value(a, "name");
+    char *sub = g_strdup_printf("%s  ·  %s %s  ·  %d mods  ·  %ldh %02ldm played", name && *name ? name : a->instance,
+                                a->mc_version ? a->mc_version : "", mc_loader_name(a->loader), count_mods(a),
                                 secs / 3600, secs / 60 % 60);
+    g_free(name);
     a->sub = mc_label(sub, "mcl-sub");
     g_free(sub);
     gtk_box_append(GTK_BOX(right), a->sub);
@@ -1086,6 +1090,7 @@ static GtkWidget *palette(app_t *a)
 
 static const struct { const char *id, *title, *icon; } PAGES[] = {
     {"home", "Home", "go-home-symbolic"},
+    {"instances", "Instances", "view-list-symbolic"},
     {"skins", "Skins", "avatar-default-symbolic"},
     {"mods", "Mods", "application-x-addon-symbolic"},
     {"configs", "Configs", "document-edit-symbolic"},
@@ -1133,8 +1138,9 @@ static void on_close(GtkButton *b, gpointer d) { (void)b; gtk_window_close(((app
 
 static void on_destroy(GtkWidget *w, gpointer data)
 {
-    (void)w;
     app_t *a = data;
+    if (GTK_WINDOW(w) != a->win)         /* an old window, replaced by mc_reload_window */
+        return;
     if (a->watch_src)
         g_source_remove(a->watch_src);
     a->watch_src = 0;
@@ -1204,6 +1210,7 @@ static void build_window(app_t *a)
     gtk_stack_set_transition_duration(GTK_STACK(a->stack), 380);
     gtk_widget_set_vexpand(a->stack, TRUE);
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_home(a), "home");
+    gtk_stack_add_named(GTK_STACK(a->stack), mc_page_instances(a), "instances");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_skins(a), "skins");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_mods(a), "mods");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_configs(a), "configs");
@@ -1216,7 +1223,7 @@ static void build_window(app_t *a)
     gtk_box_append(GTK_BOX(root), main);
 
     show_page(a, 0);
-    const char *pg = g_getenv("TUX_MC_PAGE");           /* screenshots */
+    const char *pg = a->open_page ? a->open_page : g_getenv("TUX_MC_PAGE");   /* reload, screenshots */
     for (int i = 0; pg && i < (int)G_N_ELEMENTS(PAGES); i++)
         if (!strcmp(pg, PAGES[i].id)) {
             gtk_stack_set_transition_type(GTK_STACK(a->stack), GTK_STACK_TRANSITION_TYPE_NONE);
@@ -1313,9 +1320,17 @@ static void on_startup(GApplication *app, gpointer data)
     g_object_unref(f);
     g_free(path);
 
+    /* TUX_MC_INSTANCE, else the one picked on the Instances page, else 26.3 */
     const char *inst = g_getenv("TUX_MC_INSTANCE");
-    a->instance = g_strdup(inst ? inst : "26.3");
+    char *picked = mc_cfg_str("instance", "26.3");
+    a->instance = g_strdup(inst ? inst : picked);
+    g_free(picked);
     mc_paths(a);
+    if (!inst && !g_file_test(a->instdir, G_FILE_TEST_IS_DIR) && strcmp(a->instance, "26.3")) {
+        g_free(a->instance);                     /* the picked one is gone */
+        a->instance = g_strdup("26.3");
+        mc_paths(a);
+    }
     mc_load_account(a);
     load_tux_cape(a);
     mc3d_init(&a->view);
@@ -1335,6 +1350,27 @@ void mc_paths(app_t *a)
     a->instdir = g_build_filename(a->prism, "instances", a->instance, NULL);
     a->mcdir = g_build_filename(a->instdir, "minecraft", NULL);
     a->log_path = g_build_filename(a->mcdir, "logs", "latest.log", NULL);
+    g_free(a->mc_version);
+    g_free(a->loader);
+    mc_inst_read_pack(a->instdir, &a->mc_version, &a->loader, NULL);
+}
+
+/* another instance was picked: everything (mods, configs, stats) is per
+ * instance, so build the window again and drop the old one */
+void mc_reload_window(app_t *a, const char *page)
+{
+    GtkWindow *old = a->win;
+    mc_paths(a);
+    if (a->mods) {
+        g_ptr_array_unref(a->mods);
+        a->mods = NULL;
+    }
+    a->open_page = page;
+    build_window(a);
+    a->open_page = NULL;
+    gtk_window_present(a->win);
+    if (old)
+        gtk_window_destroy(old);
 }
 
 /* the setup screen is done: load the account it signed in and show the launcher */
@@ -1363,10 +1399,15 @@ static void on_activate(GApplication *app, gpointer data)
     }
     build_window(a);
     gtk_window_present(a->win);
+    mc_update_startup(a);
 }
 
 int main(int argc, char **argv)
 {
+    if (argc > 1 && !strcmp(argv[1], "--version")) {   /* the updater runs a new build with this */
+        printf("tux-mc %s\n", TUX_MC_VERSION);
+        return 0;
+    }
     curl_global_init(CURL_GLOBAL_DEFAULT);
     static app_t a;
     a.gapp = gtk_application_new(APP_ID, G_APPLICATION_DEFAULT_FLAGS);
@@ -1375,5 +1416,7 @@ int main(int argc, char **argv)
     int rc = g_application_run(G_APPLICATION(a.gapp), argc, argv);
     g_object_unref(a.gapp);
     curl_global_cleanup();
+    if (a.restart)                       /* "Restart" after an update: the new build */
+        mc_update_restart(argv[0]);
     return rc;
 }

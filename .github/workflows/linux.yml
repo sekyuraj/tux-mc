@@ -1,0 +1,45 @@
+# Builds the Linux launcher and packs tux-mc-linux-x86_64.tar.gz (+ .sha256),
+# which the launcher's updater downloads. On every push it's an artifact of the
+# run; when a release is published, both files are attached to it.
+# Built on the oldest supported Ubuntu so the binary runs on newer systems too.
+name: linux
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libjson-glib-dev libcurl4-openssl-dev pkg-config
+
+      - name: Build the launcher
+        run: make -C launcher
+
+      - name: Pack
+        run: bash linux/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tux-mc-linux
+          path: |
+            dist/tux-mc-linux-x86_64.tar.gz
+            dist/tux-mc-linux-x86_64.tar.gz.sha256
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            dist/tux-mc-linux-x86_64.tar.gz dist/tux-mc-linux-x86_64.tar.gz.sha256 --clobber

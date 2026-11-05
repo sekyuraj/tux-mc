@@ -27,6 +27,7 @@ struct app {
 
     /* Prism */
     char *prism, *instance, *instdir, *mcdir, *log_path;
+    char *mc_version, *loader;           /* of the instance: "26.3", "fabric" ("" = vanilla) */
 
     /* account (accounts.json) */
     char *name, *uuid;
@@ -82,6 +83,14 @@ struct app {
     /* settings page */
     GtkWidget *set_mem, *set_mem_label, *set_glthread, *set_gamemode, *set_zgc, *set_wayland, *set_close,
         *set_fullscreen;
+    /* instances page */
+    GtkWidget *inst_list, *inst_name, *inst_ver, *inst_snaps, *inst_loader, *inst_fapi, *inst_create, *inst_spin,
+        *inst_msg;
+    GPtrArray *mc_versions;              /* "r:1.21.1" / "s:24w14a", newest first */
+    /* updates (Settings) */
+    GtkWidget *upd_state, *upd_button, *upd_spin;
+    bool upd_busy, upd_installed, restart;
+    const char *open_page;               /* page to show when the window is (re)built */
 };
 
 typedef struct {
@@ -144,6 +153,23 @@ long mc_http_upload_skin(const char *token, const char *variant, const char *pat
 /* a fresh Minecraft token (refreshing through Xbox if needed); NULL on failure. Blocking. */
 char *mc_auth_token(app_t *a, char **err);
 void mc_load_account(app_t *a);
+
+/* mc-instances.c */
+GtkWidget *mc_page_instances(app_t *a);
+void mc_instances_refresh(app_t *a);
+void mc_inst_read_pack(const char *instdir, char **mc, char **loader, char **loader_ver);
+const char *mc_loader_name(const char *slug);
+const char *mc_loader_slug(app_t *a);     /* Modrinth loader of the instance (fabric for vanilla) */
+/* mc-setup.c: newest Fabric API for Minecraft mc into the mods folder. Blocking. */
+bool mc_fabric_api(const char *mods, const char *mc, char **err);
+
+/* mc-update.c: new builds from the GitHub releases */
+GtkWidget *mc_update_card(app_t *a);
+void mc_update_startup(app_t *a);        /* clean up after the last update, check if asked to */
+void mc_update_restart(const char *argv0);   /* after the app quit: start the new build */
+
+/* mc.c: rebuild the window (another instance was picked), showing page */
+void mc_reload_window(app_t *a, const char *page);
 
 /* pages */
 GtkWidget *mc_page_home(app_t *a);
