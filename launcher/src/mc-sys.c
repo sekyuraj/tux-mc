@@ -2,6 +2,8 @@
  * finding Prism and its data folder, looking for running processes, RAM. */
 #include "mc.h"
 
+#include <json-glib/json-glib.h>
+
 #include <string.h>
 
 #ifdef _WIN32
@@ -158,6 +160,8 @@ static bool kill_prism(PROCESSENTRY32W *e, void *d)
     return false;
 }
 
+static DWORD found_pid;
+
 static bool java_with(PROCESSENTRY32W *e, void *needle)
 {
     if (_wcsicmp(e->szExeFile, L"javaw.exe") && _wcsicmp(e->szExeFile, L"java.exe"))
@@ -171,6 +175,8 @@ static bool java_with(PROCESSENTRY32W *e, void *needle)
         g_strdelimit(n, "/", '\\');
         char *lc = g_utf8_strdown(cl, -1), *ln = g_utf8_strdown(n, -1);
         hit = strstr(lc, ln) != NULL;
+        if (hit)
+            found_pid = e->th32ProcessID;
         g_free(lc);
         g_free(ln);
         g_free(n);
@@ -180,6 +186,8 @@ static bool java_with(PROCESSENTRY32W *e, void *needle)
 }
 #else
 /* any process whose command line contains needle (reads /proc, no pgrep) */
+static int found_pid;
+
 static bool cmdline_has(const char *needle, const char *exact_comm)
 {
     DIR *d = opendir("/proc");
@@ -205,6 +213,8 @@ static bool cmdline_has(const char *needle, const char *exact_comm)
                     if (!txt[i])
                         txt[i] = ' ';
                 hit = strstr(txt, needle) != NULL;
+                if (hit)
+                    found_pid = atoi(e->d_name);
             }
         }
         g_free(txt);
@@ -247,6 +257,93 @@ bool mc_sys_game_running(const char *instdir)
 #endif
     g_free(needle);
     return r;
+}
+
+/* -------------------------------------------------------------- focusing -- */
+
+#ifdef _WIN32
+typedef struct { DWORD pid; HWND best; } win_find_t;
+
+static BOOL CALLBACK find_window(HWND h, LPARAM lp)
+{
+    win_find_t *f = (win_find_t *)lp;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == f->pid && IsWindowVisible(h) && !GetWindow(h, GW_OWNER) && GetWindowTextLengthW(h) > 0) {
+        f->best = h;
+        return FALSE;
+    }
+    return TRUE;
+}
+#endif
+
+/* bring this instance's game window to the front; false when there's no way
+ * to on this desktop (the caller then gets out of the way instead) */
+bool mc_sys_focus_game(const char *instdir)
+{
+    char *needle = g_strdup_printf("-Djava.library.path=%s", instdir);
+    found_pid = 0;
+#ifdef _WIN32
+    bool running = each_process(java_with, needle);
+    g_free(needle);
+    if (!running || !found_pid)
+        return false;
+    win_find_t f = {found_pid, NULL};
+    EnumWindows(find_window, (LPARAM)&f);
+    if (!f.best)
+        return false;
+    if (IsIconic(f.best))
+        ShowWindow(f.best, SW_RESTORE);
+    /* Windows only lets the foreground app hand focus over: borrow its input queue */
+    HWND fg = GetForegroundWindow();
+    DWORD me = GetCurrentThreadId(), them = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
+    if (them && them != me)
+        AttachThreadInput(them, me, TRUE);
+    BringWindowToTop(f.best);
+    bool ok = SetForegroundWindow(f.best);
+    if (them && them != me)
+        AttachThreadInput(them, me, FALSE);
+    return ok;
+#else
+    bool running = cmdline_has(needle, NULL);
+    g_free(needle);
+    if (!running || !found_pid)
+        return false;
+    char *cmd = NULL;
+    if (g_getenv("NIRI_SOCKET")) {
+        /* niri: the window whose pid is the game's */
+        char *out = NULL;
+        if (g_spawn_command_line_sync("niri msg -j windows", &out, NULL, NULL, NULL) && out) {
+            JsonParser *p = json_parser_new();
+            if (json_parser_load_from_data(p, out, -1, NULL) && JSON_NODE_HOLDS_ARRAY(json_parser_get_root(p))) {
+                JsonArray *ws = json_node_get_array(json_parser_get_root(p));
+                for (guint i = 0; i < json_array_get_length(ws) && !cmd; i++) {
+                    JsonObject *w = json_array_get_object_element(ws, i);
+                    if (json_object_get_int_member_with_default(w, "pid", -1) == found_pid)
+                        cmd = g_strdup_printf("niri msg action focus-window --id %" G_GINT64_FORMAT,
+                                              json_object_get_int_member(w, "id"));
+                }
+            }
+            g_object_unref(p);
+        }
+        g_free(out);
+    } else if (g_getenv("HYPRLAND_INSTANCE_SIGNATURE")) {
+        cmd = g_strdup_printf("hyprctl dispatch focuswindow pid:%d", found_pid);
+    } else if (g_getenv("SWAYSOCK")) {
+        cmd = g_strdup_printf("swaymsg [pid=%d] focus", found_pid);
+    } else if (g_getenv("DISPLAY") && !g_getenv("WAYLAND_DISPLAY")) {
+        char *x = g_find_program_in_path("xdotool");
+        if (x)
+            cmd = g_strdup_printf("%s search --pid %d --onlyvisible windowactivate", x, found_pid);
+        g_free(x);
+    }
+    if (!cmd)
+        return false;
+    int status = 0;
+    bool ok = g_spawn_command_line_sync(cmd, NULL, NULL, &status, NULL) && g_spawn_check_wait_status(status, NULL);
+    g_free(cmd);
+    return ok;
+#endif
 }
 
 /* --------------------------------------------------------------------- RAM -- */

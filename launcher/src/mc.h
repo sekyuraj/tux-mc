@@ -121,6 +121,8 @@ void mc_sys_stop_prism(void);
 bool mc_sys_game_running(const char *instdir);
 int mc_sys_ram_gb(void);
 bool mc_sys_run_prism(const char *const *args, GError **err);
+/* bring the game window of this instance to the front (after it started) */
+bool mc_sys_focus_game(const char *instdir);
 
 /* mc-setup.c: first run without Prism, an account or the instance */
 bool mc_setup_needed(app_t *a);
@@ -164,6 +166,16 @@ const char *mc_loader_slug(app_t *a);     /* Modrinth loader of the instance (fa
 bool mc_fabric_api(const char *mods, const char *mc, char **err);
 bool mc_modrinth_mod(const char *mods, const char *slug, const char *title, const char *prefix, const char *mc,
                      char **err);
+
+/* mc-zip.c: zips without an unzip program. read: the first entry matching a
+ * glob (shaders/ANY.properties). extract: entries under prefix (may be NULL)
+ * into dest, refusing names that would leave it */
+GBytes *mc_zip_read(const char *zip, const char *pattern);
+char **mc_zip_list(const char *zip);
+bool mc_zip_extract(const char *zip, const char *prefix, const char *dest, char **err);
+
+/* mc-import.c: the Import page (worlds, schematics, packs from other launchers or files) */
+GtkWidget *mc_page_import(app_t *a);
 
 /* mc-themes.c: colour presets for the launcher (and Prism) */
 GtkWidget *mc_themes_card(app_t *a);

@@ -83,6 +83,8 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 
 - Full screen over your wallpaper, with a 3D model of your player.
 - **Instances**: every Prism instance, and which one Start plays. Make new ones with any Minecraft version (snapshots too) and Vanilla, Fabric, Quilt, NeoForge or Forge. Fabric API is added for you if you want it. Prism downloads the game the first time you start a new instance.
+- **Import**: bring worlds, schematics (.litematic, .schem, .schematic, .nbt), resource packs, shader packs and screenshots over from the Minecraft Launcher, CurseForge, the Modrinth App, other Prism instances or any folder, by ticking them; or drop world zips, schematics, packs and mods on the page. It only copies: nothing is moved or deleted where it comes from, nothing here is overwritten (a second copy becomes "Name (2)"), a world only appears once it's complete, and free space is checked first.
+- When the game is up, the launcher brings its window to the front (Windows; niri, Hyprland, sway and X11 on Linux; elsewhere it minimizes itself). F11 makes the launcher fullscreen; on Windows dragging it to the top of the screen maximizes it and to the sides tiles it.
 - **Capes**: switches your official Mojang cape and shows the client capes on the model. Picking a picture for the Picture cape opens an editor: drag it into place, zoom, stretch or squeeze it on either axis, rotate, flip, and choose what fills the empty space.
 - **Account**: click your name at the bottom of the sidebar for your UUID, signing in again, Prism's account manager and your NameMC page. If your skin is drawn for slim arms but your account says classic (or the other way round), it says so and fixes it with one click.
 - **Skins**: upload a skin, keep a library of them, or copy one from a player by name.
@@ -91,7 +93,7 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 - **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
 - **Themes**: colour presets for the launcher and Prism. Built-in ones, your own (saved in `~/.config/tux-mc/presets/`), and your desktop themes if you use `~/.config/themes`. Picking one previews it; Apply keeps it.
 - **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
-- Ctrl+1..6 switches pages.
+- Ctrl+1..7 switches pages.
 
 ## Themes
 

@@ -18,6 +18,10 @@
 #include "tuxmc.h"
 
 #include <curl/curl.h>
+#ifdef _WIN32
+#include <gdk/win32/gdkwin32.h>
+#include <windows.h>
+#endif
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -876,6 +880,9 @@ static gboolean watch_log(gpointer data)
         a->progress_target = 1;
         set_start_label(a, "Have fun");
         a->watch_src = 0;
+        /* the launcher stays open: the game comes to the front (or we step aside) */
+        if (!mc_sys_focus_game(a->instdir) && !mc_cfg_bool("close_on_start", false))
+            gtk_window_minimize(a->win);
         if (mc_cfg_bool("close_on_start", false))
             g_timeout_add(1200, close_later, a);
         else
@@ -1090,6 +1097,7 @@ static GtkWidget *palette(app_t *a)
 static const struct { const char *id, *title, *icon; } PAGES[] = {
     {"home", "Home", "go-home-symbolic"},
     {"instances", "Instances", "view-list-symbolic"},
+    {"import", "Import", "folder-download-symbolic"},
     {"skins", "Skins", "avatar-default-symbolic"},
     {"mods", "Mods", "application-x-addon-symbolic"},
     {"configs", "Configs", "document-edit-symbolic"},
@@ -1121,6 +1129,13 @@ static gboolean on_key(GtkEventControllerKey *k, guint key, guint code, GdkModif
         gtk_window_close(a->win);
         return TRUE;
     }
+    if (key == GDK_KEY_F11) {
+        if (gtk_window_is_fullscreen(a->win))
+            gtk_window_unfullscreen(a->win);
+        else
+            gtk_window_fullscreen(a->win);
+        return TRUE;
+    }
     /* Ctrl, not Alt: Alt+number is niri's workspace switch here */
     if ((st & GDK_CONTROL_MASK) && key >= GDK_KEY_1 && key < GDK_KEY_1 + (int)G_N_ELEMENTS(PAGES)) {
         show_page(a, key - GDK_KEY_1);
@@ -1146,6 +1161,38 @@ static void on_destroy(GtkWidget *w, gpointer data)
     a->win = NULL;
 }
 
+#ifdef _WIN32
+/* a press on the title bar (not on its buttons): let Windows move the window,
+ * so dragging to the top maximizes and to the sides tiles, like any app. Only
+ * when the window has the native resize frame snapping needs; otherwise GTK's
+ * own drag stays. Double clicks are left to GTK (maximize). */
+static void on_title_press(GtkGestureClick *g, int n, double x, double y, gpointer data)
+{
+    app_t *a = data;
+    if (n != 1 || gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)) != GDK_BUTTON_PRIMARY)
+        return;
+    GtkWidget *w = gtk_widget_pick(GTK_WIDGET(a->win), x, y, GTK_PICK_DEFAULT);
+    bool title = false;
+    for (; w && w != GTK_WIDGET(a->win); w = gtk_widget_get_parent(w)) {
+        if (GTK_IS_BUTTON(w))
+            return;
+        if (GTK_IS_HEADER_BAR(w) || GTK_IS_WINDOW_HANDLE(w))
+            title = true;
+    }
+    if (!title)
+        return;
+    GdkSurface *sf = gtk_native_get_surface(GTK_NATIVE(a->win));
+    HWND h = sf ? (HWND)gdk_win32_surface_get_handle(sf) : NULL;
+    if (!h || !(GetWindowLongPtrW(h, GWL_STYLE) & WS_THICKFRAME))
+        return;
+    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
+    POINT pt;
+    GetCursorPos(&pt);
+    ReleaseCapture();
+    PostMessageW(h, WM_NCLBUTTONDOWN, HTCAPTION, MAKELPARAM(pt.x, pt.y));
+}
+#endif
+
 static void build_window(app_t *a)
 {
     a->win = GTK_WINDOW(gtk_application_window_new(a->gapp));
@@ -1156,6 +1203,13 @@ static void build_window(app_t *a)
     GtkEventController *keys = gtk_event_controller_key_new();
     g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), a);
     gtk_widget_add_controller(GTK_WIDGET(a->win), keys);
+#ifdef _WIN32
+    GtkGesture *tp = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(tp), GDK_BUTTON_PRIMARY);
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(tp), GTK_PHASE_CAPTURE);
+    g_signal_connect(tp, "pressed", G_CALLBACK(on_title_press), a);
+    gtk_widget_add_controller(GTK_WIDGET(a->win), GTK_EVENT_CONTROLLER(tp));
+#endif
 
     GtkWidget *over = gtk_overlay_new();
     gtk_window_set_child(a->win, over);
@@ -1206,6 +1260,7 @@ static void build_window(app_t *a)
     gtk_widget_set_vexpand(a->stack, TRUE);
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_home(a), "home");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_instances(a), "instances");
+    gtk_stack_add_named(GTK_STACK(a->stack), mc_page_import(a), "import");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_skins(a), "skins");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_mods(a), "mods");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_configs(a), "configs");

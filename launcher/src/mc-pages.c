@@ -588,30 +588,7 @@ static void mod_free(mc_mod_t *m)
     g_free(m);
 }
 
-static GBytes *unzip_p(const char *jar, const char *entry)
-{
-    char *argv[] = {"unzip", "-p", (char *)jar, (char *)entry, NULL};
-    char *out = NULL;
-    gsize n = 0;
-    GError *e = NULL;
-    GSubprocess *p = g_subprocess_newv((const char *const *)argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-                                       G_SUBPROCESS_FLAGS_STDERR_SILENCE, &e);
-    if (!p) {
-        g_clear_error(&e);
-        return NULL;
-    }
-    GBytes *b = NULL;
-    if (g_subprocess_communicate(p, NULL, NULL, &b, NULL, NULL) && b && g_bytes_get_size(b) > 0) {
-        g_object_unref(p);
-        return b;
-    }
-    if (b)
-        g_bytes_unref(b);
-    g_object_unref(p);
-    (void)out;
-    (void)n;
-    return NULL;
-}
+static GBytes *unzip_p(const char *jar, const char *entry) { return mc_zip_read(jar, entry); }
 
 GdkTexture *mc_mod_icon(const mc_mod_t *m)
 {

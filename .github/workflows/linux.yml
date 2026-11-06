@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libjson-glib-dev libcurl4-openssl-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libjson-glib-dev libcurl4-openssl-dev zlib1g-dev pkg-config
 
       - name: Build the launcher
         run: make -C launcher
