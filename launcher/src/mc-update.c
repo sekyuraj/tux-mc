@@ -338,6 +338,7 @@ typedef struct {
     app_t *a;
     bool quiet;                          /* the check on start: only speak up when there is news */
     bool installed, up_to_date;
+    bool building;                       /* released, but GitHub is still making its build */
     char *tag, *msg;
 } job_t;
 
@@ -379,9 +380,15 @@ static void job_thread(GTask *t, gpointer s, gpointer data, GCancellable *c)
     bool missing = false;
     char *err = NULL, *file = fetch_checked(base, asset, dir, &missing, &err);
     bool ok = file != NULL;
-    if (!ok && missing) {
+    if (!ok && missing) {                /* published a minute ago: the builds take a few */
+        j->building = true;
+        j->msg = g_strdup_printf("%s is out and GitHub is still building it. It installs by itself in a few "
+                                 "minutes.", j->tag);
         g_free(err);
-        err = g_strdup_printf("%s is out, but its build isn't uploaded yet. Try again in a few minutes.", j->tag);
+        g_free(dir);
+        g_free(base);
+        g_task_return_boolean(t, FALSE);
+        return;
     }
     char *x = g_build_filename(dir, "x", NULL);
     if (ok)
@@ -417,6 +424,15 @@ static void set_state(app_t *a, const char *text)
         gtk_label_set_text(GTK_LABEL(a->upd_state), text);
 }
 
+static void run_job(app_t *a, bool quiet);
+static int build_tries;
+
+static gboolean retry_later(gpointer data)
+{
+    run_job(data, true);
+    return G_SOURCE_REMOVE;
+}
+
 static void job_done(GObject *s, GAsyncResult *r, gpointer data)
 {
     (void)s;
@@ -436,6 +452,11 @@ static void job_done(GObject *s, GAsyncResult *r, gpointer data)
     if (!j->quiet || j->installed || (!j->up_to_date && j->tag))
         if (a->win)
             mc_status(a, "%s", j->msg);
+    /* look again every 2 minutes while the build is being made (for up to 40 min) */
+    if (j->building && build_tries++ < 20)
+        g_timeout_add_seconds(120, retry_later, a);
+    else if (!j->building)
+        build_tries = 0;
 }
 
 static void run_job(app_t *a, bool quiet)
