@@ -421,7 +421,7 @@ GtkWidget *mc_stage(app_t *a, mc3d_t *v, GtkDrawingAreaDrawFunc draw)
 static const struct { const char *id, *name; } TUX_CAPES[] = {
     {"tux", "Tux"},         {"gentoo", "Gentoo"}, {"steamos", "SteamOS"},  {"arch", "Arch"},
     {"debian", "Debian"},   {"mint", "Mint"},     {"freebsd", "FreeBSD"},  {"openbsd", "OpenBSD"},
-    {"lfs", "LFS"},         {"crux", "CRUX"},     {"stars", "Starfield"},  {"synth", "Synthwave"},
+    {"lfs", "LFS"},         {"crux", "CRUX"},     {"windows11", "Windows 11"}, {"stars", "Starfield"},  {"synth", "Synthwave"},
     {"image", "Picture…"},  {"none", "Off"},
 };
 #define NTUX (int)G_N_ELEMENTS(TUX_CAPES)
@@ -680,6 +680,14 @@ static void set_tux_cape(app_t *a, const char *id)
         mc3d_show_back(&a->view);
 }
 
+/* the editor saved the cape-shaped picture */
+static void picture_saved(app_t *a, const char *path)
+{
+    mc_tuxmc_set(a, "capeImage", path);
+    set_tux_cape(a, "image");
+    mc_status(a, "Picture cape: other tux-mc players see it too (if they share pictures)");
+}
+
 static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
 {
     app_t *a = data;
@@ -687,16 +695,7 @@ static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
     if (!f)
         return;
     char *p = g_file_get_path(f);
-    int w, h;
-    guint32 *px = load_argb(p, &w, &h);
-    if (px) {
-        mc_tuxmc_set(a, "capeImage", p);
-        set_tux_cape(a, "image");
-        mc_status(a, "Picture cape: other tux-mc players see it too (if they share pictures)");
-    } else {
-        mc_status(a, "Couldn't read that picture");
-    }
-    g_free(px);
+    mc_cape_editor(a, p, picture_saved);   /* crop / stretch it first */
     g_free(p);
     g_object_unref(f);
 }
@@ -877,7 +876,7 @@ static gboolean watch_log(gpointer data)
         a->progress_target = 1;
         set_start_label(a, "Have fun");
         a->watch_src = 0;
-        if (mc_cfg_bool("close_on_start", true))
+        if (mc_cfg_bool("close_on_start", false))
             g_timeout_add(1200, close_later, a);
         else
             g_timeout_add(2500, reset_start, a);
@@ -1191,11 +1190,7 @@ static void build_window(app_t *a)
     GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_vexpand(spacer, TRUE);
     gtk_box_append(GTK_BOX(side), spacer);
-    GtkWidget *who = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_widget_add_css_class(who, "mcl-who");
-    gtk_box_append(GTK_BOX(who), mc_label(a->name ? a->name : "not logged in", "mcl-who-name"));
-    gtk_box_append(GTK_BOX(who), mc_label("Microsoft account", "dim"));
-    gtk_box_append(GTK_BOX(side), who);
+    gtk_box_append(GTK_BOX(side), mc_account_button(a));
     GtkWidget *quit = gtk_button_new_with_label("Close  (Esc)");
     gtk_widget_add_css_class(quit, "mcl-quit");
     g_signal_connect(quit, "clicked", G_CALLBACK(on_close), a);
@@ -1234,6 +1229,8 @@ static void build_window(app_t *a)
     repaint_tux_capes(a);
     mc_home_refresh_capes(a);
     mc_apply_looks(a);
+    if (g_getenv("TUX_MC_CAPE_EDIT"))                       /* screenshots */
+        mc_cape_editor(a, g_getenv("TUX_MC_CAPE_EDIT"), picture_saved);
     if (!a->name)
         mc_status(a, "No account in Prism yet: log in there once (Settings → Open Prism).");
     else
@@ -1410,7 +1407,8 @@ int main(int argc, char **argv)
     }
     curl_global_init(CURL_GLOBAL_DEFAULT);
     static app_t a;
-    a.gapp = gtk_application_new(APP_ID, G_APPLICATION_DEFAULT_FLAGS);
+    const char *id = g_getenv("TUX_MC_APP_ID");          /* a second copy for testing */
+    a.gapp = gtk_application_new(id && *id ? id : APP_ID, G_APPLICATION_DEFAULT_FLAGS);
     g_signal_connect(a.gapp, "startup", G_CALLBACK(on_startup), &a);
     g_signal_connect(a.gapp, "activate", G_CALLBACK(on_activate), &a);
     int rc = g_application_run(G_APPLICATION(a.gapp), argc, argv);

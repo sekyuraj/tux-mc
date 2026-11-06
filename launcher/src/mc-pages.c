@@ -104,6 +104,7 @@ static void draw_head(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer da
 
 static void pick_skin(app_t *a, cairo_surface_t *s, const char *path, bool slim)
 {
+    slim |= mc3d_skin_is_slim(s);          /* the picture knows better than a file name */
     if (a->skin_pick && a->skin_pick != a->skin)
         cairo_surface_destroy(a->skin_pick);
     a->skin_pick = s == a->skin ? s : cairo_surface_reference(s);
@@ -425,6 +426,23 @@ static void upload_done(GObject *s, GAsyncResult *r, gpointer data)
     g_free(u->path);
     g_free(u->err);
     g_free(u);
+}
+
+/* upload a skin png as the account's skin (the account menu uses it too) */
+void mc_skin_upload(app_t *a, const char *path, bool slim)
+{
+    if (a->busy)
+        return;
+    a->busy = true;
+    up_t *u = g_new0(up_t, 1);
+    u->a = a;
+    u->path = g_strdup(path);
+    u->slim = slim;
+    mc_status(a, "Uploading the skin…");
+    GTask *t = g_task_new(NULL, NULL, upload_done, u);
+    g_task_set_task_data(t, u, NULL);
+    g_task_run_in_thread(t, upload_thread);
+    g_object_unref(t);
 }
 
 static void on_skin_apply(GtkButton *b, gpointer data)
@@ -1462,11 +1480,22 @@ static void on_open_shots(GtkButton *b, gpointer data)
     g_free(d);
 }
 
-static GtkWidget *column(void)
+/* one section of the settings sub-menu: cards in two columns, scrolling */
+static GtkWidget *section(GtkWidget *stack, const char *id, const char *title, GtkWidget **c1, GtkWidget **c2)
 {
-    GtkWidget *c = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
-    gtk_widget_set_hexpand(c, TRUE);
-    return c;
+    GtkWidget *cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+    gtk_box_set_homogeneous(GTK_BOX(cols), TRUE);
+    *c1 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    *c2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    gtk_box_append(GTK_BOX(cols), *c1);
+    gtk_box_append(GTK_BOX(cols), *c2);
+    GtkWidget *sc = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sc), cols);
+    gtk_widget_set_vexpand(sc, TRUE);
+    gtk_widget_set_hexpand(sc, TRUE);
+    gtk_stack_add_titled(GTK_STACK(stack), sc, id, title);
+    return sc;
 }
 
 GtkWidget *mc_page_settings(app_t *a)
@@ -1474,11 +1503,22 @@ GtkWidget *mc_page_settings(app_t *a)
     GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 14);
     gtk_widget_add_css_class(page, "mcl-page");
     gtk_box_append(GTK_BOX(page), mc_label("Settings", "mcl-title"));
-    GtkWidget *cols = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
-    gtk_box_set_homogeneous(GTK_BOX(cols), TRUE);
-    GtkWidget *c1 = column(), *c2 = column(), *c3 = column();
+    GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 18);
+    gtk_widget_set_vexpand(row, TRUE);
+    GtkWidget *stack = gtk_stack_new();
+    gtk_stack_set_transition_type(GTK_STACK(stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+    gtk_stack_set_transition_duration(GTK_STACK(stack), 160);
+    GtkWidget *side = gtk_stack_sidebar_new();
+    gtk_stack_sidebar_set_stack(GTK_STACK_SIDEBAR(side), GTK_STACK(stack));
+    gtk_widget_add_css_class(side, "mcl-subnav");
+    gtk_widget_set_size_request(side, 180, -1);
+    gtk_box_append(GTK_BOX(row), side);
+    gtk_box_append(GTK_BOX(row), stack);
+    gtk_box_append(GTK_BOX(page), row);
+    GtkWidget *c1, *c2;
 
     /* game */
+    section(stack, "game", "Game", &c1, &c2);
     int total = total_ram_gb();
     char *ms = g_strdup_printf("How much RAM Java may take. This computer has %d GB.", total);
     GtkWidget *mem = mc_card("Memory", ms);
@@ -1508,9 +1548,10 @@ GtkWidget *mc_page_settings(app_t *a)
     set_row(a, win, "maximized", false, "Start maximized", NULL);
     spin_row(a, win, "win_w", 1280, 320, 7680, 10, "Width", NULL);
     spin_row(a, win, "win_h", 720, 240, 4320, 10, "Height", NULL);
-    gtk_box_append(GTK_BOX(c1), win);
+    gtk_box_append(GTK_BOX(c2), win);
 
-    /* speed + java */
+    /* performance */
+    section(stack, "speed", "Performance", &c1, &c2);
     GtkWidget *speed = mc_card("Speed", "None of these lower the picture quality.");
     if (MC_LINUX) {                      /* Mesa, gamemode and Wayland are Linux things */
         a->set_glthread = set_row(a, speed, "glthread", true, "GPU threading",
@@ -1523,7 +1564,7 @@ GtkWidget *mc_page_settings(app_t *a)
     if (MC_LINUX)
         a->set_wayland = set_row(a, speed, "wayland", true, "Native Wayland",
                                  "run without XWayland (SDL_VIDEO_DRIVER=wayland)");
-    gtk_box_append(GTK_BOX(c2), speed);
+    gtk_box_append(GTK_BOX(c1), speed);
 
     GtkWidget *adv = mc_card("Advanced", "Added to what the switches above set.");
     entry_row(a, adv, "jvm_args", "Java arguments", NULL, "-Dfoo=bar -XX:…");
@@ -1533,24 +1574,16 @@ GtkWidget *mc_page_settings(app_t *a)
     gtk_box_append(GTK_BOX(c2), adv);
 
     /* launcher */
-    gtk_box_append(GTK_BOX(c3), mc_update_card(a));
+    section(stack, "launcher", "Launcher", &c1, &c2);
     GtkWidget *beh = mc_card("Launcher", NULL);
-    a->set_close = set_row(a, beh, "close_on_start", true, "Close when the game is up", NULL);
+    a->set_close = set_row(a, beh, "close_on_start", false, "Close when the game is up", NULL);
     set_row(a, beh, "console", false, "Prism console", "show Prism's log window while playing");
     set_row(a, beh, "console_on_error", true, "Console on a crash", "open the log when the game crashes");
     look_row(a, beh, "show_stats", true, "Stats on Home", "version, mod count, time played");
     look_row(a, beh, "page_anim", true, "Page animations", NULL);
-    gtk_box_append(GTK_BOX(c3), beh);
+    gtk_box_append(GTK_BOX(c1), beh);
 
-    GtkWidget *looks = mc_card("Looks", NULL);
-    GtkWidget *bl = spin_row(a, looks, "bg_blur", 6, 0, 30, 1, "Wallpaper blur", NULL);
-    g_object_set_data(G_OBJECT(bl), "looks", GINT_TO_POINTER(1));
-    look_row(a, looks, "bg_motion", true, "Wallpaper drift", "slow zoom and pan");
-    look_row(a, looks, "bg_dust", true, "Floating dust", NULL);
-    look_row(a, looks, "model_turn", true, "Player turns by itself", "when you leave it alone");
-    look_row(a, looks, "model_idle", true, "Player breathes", "idle sway and cape swing");
-    gtk_box_append(GTK_BOX(c3), looks);
-
+    GtkWidget *fold = mc_card("Folders", NULL);
     GtkWidget *br = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(br), GTK_SELECTION_NONE);
     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(br), 6);
@@ -1564,15 +1597,35 @@ GtkWidget *mc_page_settings(app_t *a)
         g_signal_connect(b, "clicked", bs[i].cb, a);
         gtk_flow_box_append(GTK_FLOW_BOX(br), b);
     }
-    gtk_box_append(GTK_BOX(c3), br);
+    gtk_box_append(GTK_BOX(fold), br);
+    gtk_box_append(GTK_BOX(c2), fold);
 
-    gtk_box_append(GTK_BOX(cols), c1);
-    gtk_box_append(GTK_BOX(cols), c2);
-    gtk_box_append(GTK_BOX(cols), c3);
-    GtkWidget *sc = gtk_scrolled_window_new();
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sc), cols);
-    gtk_widget_set_vexpand(sc, TRUE);
-    gtk_box_append(GTK_BOX(page), sc);
+    /* looks */
+    section(stack, "looks", "Looks", &c1, &c2);
+    GtkWidget *looks = mc_card("Background", NULL);
+    GtkWidget *bl = spin_row(a, looks, "bg_blur", 6, 0, 30, 1, "Wallpaper blur", NULL);
+    g_object_set_data(G_OBJECT(bl), "looks", GINT_TO_POINTER(1));
+    look_row(a, looks, "bg_motion", true, "Wallpaper drift", "slow zoom and pan");
+    look_row(a, looks, "bg_dust", true, "Floating dust", NULL);
+    gtk_box_append(GTK_BOX(c1), looks);
+    GtkWidget *model = mc_card("Player model", NULL);
+    look_row(a, model, "model_turn", true, "Player turns by itself", "when you leave it alone");
+    look_row(a, model, "model_idle", true, "Player breathes", "idle sway and cape swing");
+    gtk_box_append(GTK_BOX(c2), model);
+
+    /* themes: one wide column */
+    section(stack, "themes", "Themes", &c1, &c2);
+    gtk_box_set_homogeneous(GTK_BOX(gtk_widget_get_parent(c1)), FALSE);
+    gtk_widget_set_hexpand(c1, TRUE);
+    gtk_widget_set_visible(c2, FALSE);
+    gtk_box_append(GTK_BOX(c1), mc_themes_card(a));
+
+    /* updates */
+    section(stack, "updates", "Updates", &c1, &c2);
+    gtk_box_append(GTK_BOX(c1), mc_update_card(a));
+
+    const char *sub = g_getenv("TUX_MC_SETTINGS");          /* screenshots */
+    if (sub)
+        gtk_stack_set_visible_child_name(GTK_STACK(stack), sub);
     return page;
 }

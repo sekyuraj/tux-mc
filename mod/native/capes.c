@@ -60,6 +60,7 @@ static const struct {
     {"debian", 0xFFF4F4F4, 0xFFD6D6D6, 0},  {"mint", 0xFF2E2E2E, 0xFF141414, 0},
     {"freebsd", 0xFF262626, 0xFF0D0D0D, 0}, {"openbsd", 0xFF2B4A78, 0xFF101C30, 0},
     {"lfs", 0xFFFFFFFF, 0xFFFFFFFF, 0},     {"crux", 0xFF1F3354, 0xFF0C1626, 0},
+    {"windows11", 0xFFF3F3F3, 0xFFDCDCDC, 0},
 };
 
 static uint32_t sample_nearest(const tuxmc_img_t *im, float u, float v)
@@ -139,7 +140,7 @@ static void face(uint32_t *out, int s, const char *id, int fx, int fy, const tux
 }
 
 const char *const tuxmc_cape_ids[] = {"tux",     "gentoo", "steamos", "arch", "debian", "mint",  "freebsd",
-                                      "openbsd", "lfs",    "crux",    "stars", "synth",  "image", NULL};
+                                      "openbsd", "lfs",    "crux",    "windows11", "stars", "synth",  "image", NULL};
 
 void tuxmc_cape(const char *id, int s, const tuxmc_pal_t *p, const tuxmc_img_t *img, uint32_t *out)
 {

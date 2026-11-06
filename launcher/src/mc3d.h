@@ -34,3 +34,7 @@ void mc3d_drag(mc3d_t *v, double dx_pixels, double dy_pixels);
 void mc3d_release(mc3d_t *v, double vx_pixels_per_s);
 /* turn round for a few seconds so the cape is in view */
 void mc3d_show_back(mc3d_t *v);
+/* a 64x64 skin drawn for 3-pixel arms: the 4th arm column is empty. Mojang
+ * keeps the model separately and it can be wrong (a slim skin uploaded as
+ * classic), so the picture decides. */
+bool mc3d_skin_is_slim(cairo_surface_t *skin);

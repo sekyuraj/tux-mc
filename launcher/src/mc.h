@@ -162,6 +162,17 @@ const char *mc_loader_name(const char *slug);
 const char *mc_loader_slug(app_t *a);     /* Modrinth loader of the instance (fabric for vanilla) */
 /* mc-setup.c: newest Fabric API for Minecraft mc into the mods folder. Blocking. */
 bool mc_fabric_api(const char *mods, const char *mc, char **err);
+bool mc_modrinth_mod(const char *mods, const char *slug, const char *title, const char *prefix, const char *mc,
+                     char **err);
+
+/* mc-themes.c: colour presets for the launcher (and Prism) */
+GtkWidget *mc_themes_card(app_t *a);
+
+/* mc-account.c: the account box in the sidebar opens this */
+GtkWidget *mc_account_button(app_t *a);
+
+/* mc-capeedit.c: crop/stretch a picture into a cape, then use it */
+void mc_cape_editor(app_t *a, const char *path, void (*done)(app_t *a, const char *saved));
 
 /* mc-update.c: new builds from the GitHub releases */
 GtkWidget *mc_update_card(app_t *a);
@@ -180,6 +191,7 @@ GtkWidget *mc_page_settings(app_t *a);
 void mc_home_refresh_capes(app_t *a);
 void mc_settings_apply(app_t *a);        /* write instance.cfg (Prism must not be running) */
 void mc_skins_reload(app_t *a);
+void mc_skin_upload(app_t *a, const char *path, bool slim);   /* async, reports in the status line */
 void mc_mods_scan(app_t *a);              /* async; refreshes the Mods and Configs pages */
 void mc_configs_refresh(app_t *a);
 void mc_apply_looks(app_t *a);            /* launcher look settings changed */

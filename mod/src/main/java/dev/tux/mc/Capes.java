@@ -37,6 +37,7 @@ public final class Capes {
         ALL.put("openbsd", "OpenBSD");
         ALL.put("lfs", "LFS");
         ALL.put("crux", "CRUX");
+        ALL.put("windows11", "Windows 11");
         ALL.put("stars", "Starfield");
         ALL.put("synth", "Synthwave");
         ALL.put("image", "Picture");
@@ -153,7 +154,7 @@ public final class Capes {
 
     /** capes drawn from assets/tuxmc/<id>.png (same list as LOGOS in native/capes.c) */
     public static final java.util.Set<String> LOGOS = java.util.Set.of("tux", "gentoo", "steamos", "arch", "debian",
-            "mint", "freebsd", "openbsd", "lfs", "crux");
+            "mint", "freebsd", "openbsd", "lfs", "crux", "windows11");
 
     private static final Map<String, Img> logos = new HashMap<>();
 

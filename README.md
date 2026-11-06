@@ -54,10 +54,10 @@ Options:
   - Waypoints: kept per server, with death points, nether coordinates and a HUD arrow.
   - Session, Emotes, Capes, Settings.
 - **Players near**: an alert and a HUD count for players within a radius you pick (16 to 256 blocks, or the whole render distance).
-- **Render distance up to 256** in Video Settings (Sodium's slider follows). In singleplayer the built-in server loads up to 125 chunks; past that it can't keep up (at 251 it used 20 GB and the chunks around the player never arrived). For a view that far, set Distant Horizons' LOD radius to 256 and keep the render distance at 12 to 32.
+- **Render distance up to 256** in Video Settings (Sodium's slider follows; the installer and the launcher's setup put Sodium in for you). In singleplayer the built-in server loads up to 125 chunks; past that it can't keep up (at 251 it used 20 GB and the chunks around the player never arrived). For a view that far, set Distant Horizons' LOD radius to 256 and keep the render distance at 12 to 32.
 - **Hit delay fix**: on modern versions, a click that hits air blocks your clicks for half a second, so in 1.8-style PvP many hits are never sent. This removes that block. It's on by default; turn it off under Settings → Combat. It isn't on Hypixel's list of allowed mods, so whether you use it there is up to you.
 - **Emote wheel** on `.`: wave, dance, sit, lay, clap, spin, bow, dab.
-- **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, two drawn ones (Starfield, Synthwave), and a cape from your own picture.
+- **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, Windows 11, two drawn ones (Starfield, Synthwave), and a cape from your own picture.
 - **Zoom** on C, fullbright, an info HUD, armor and totem counts, and a streamer mode that hides coordinates.
 - **Auto reconnect** after a kick.
 - **No block limit** for `/fill`, `/clone` and `/fillbiome` in singleplayer and LAN.
@@ -83,11 +83,13 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 
 - Full screen over your wallpaper, with a 3D model of your player.
 - **Instances**: every Prism instance, and which one Start plays. Make new ones with any Minecraft version (snapshots too) and Vanilla, Fabric, Quilt, NeoForge or Forge. Fabric API is added for you if you want it. Prism downloads the game the first time you start a new instance.
-- **Capes**: switches your official Mojang cape and shows the client capes on the model.
+- **Capes**: switches your official Mojang cape and shows the client capes on the model. Picking a picture for the Picture cape opens an editor: drag it into place, zoom, stretch or squeeze it on either axis, rotate, flip, and choose what fills the empty space.
+- **Account**: click your name at the bottom of the sidebar for your UUID, signing in again, Prism's account manager and your NameMC page. If your skin is drawn for slim arms but your account says classic (or the other way round), it says so and fixes it with one click.
 - **Skins**: upload a skin, keep a library of them, or copy one from a player by name.
 - **Mods**: list, turn on and off, delete, drop in jars, and search and install from Modrinth.
 - **Configs**: an editor for mod configs.
-- **Settings**: RAM, JVM arguments, environment, wrapper command, and window size.
+- **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
+- **Themes**: colour presets for the launcher and Prism. Built-in ones, your own (saved in `~/.config/tux-mc/presets/`), and your desktop themes if you use `~/.config/themes`. Picking one previews it; Apply keeps it.
 - **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
 - Ctrl+1..6 switches pages.
 

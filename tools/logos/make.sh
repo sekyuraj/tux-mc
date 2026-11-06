@@ -28,6 +28,7 @@ svg archlinux; make_logo arch archlinux color 1793D1
 svg debian;    make_logo debian debian color D70A53
 svg freebsd;   make_logo freebsd freebsd color EB0028 erase 1869 0 179 358   # without the ®
 svg mint;      make_logo mint mint
+svg windows11; make_logo windows11 windows11                   # Windows 11 (Commons, public domain)
 # the real LFS logo (from linuxfromscratch.org, CC0 on Wikimedia Commons). Only
 # 192x75 exists, so it stays at its own size; its background is white, and so is the cape
 cp "$D/src/lfs-logo.png" "$B/lfs.png"
@@ -39,6 +40,6 @@ echo "  lfs"
 if [[ ${1:-} == --sheet ]]; then
     cc -O2 -I"$R/mod/native" -o "$B/sheet" "$D/sheet.c" "$R/mod/native/capes.c" \
         $(pkg-config --cflags --libs gdk-pixbuf-2.0) -lm
-    "$B/sheet" "$D/sheet.png" 32 "$R/mod/src/main/resources/assets/tuxmc" tux openbsd freebsd arch debian mint lfs
+    "$B/sheet" "$D/sheet.png" 32 "$R/mod/src/main/resources/assets/tuxmc" tux openbsd freebsd arch debian mint lfs windows11
     echo "wrote $D/sheet.png"
 fi

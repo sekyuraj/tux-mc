@@ -254,6 +254,25 @@ static void raster_face(const scene_t *sc, const face_t *f, double ss)
 }
 
 /* ------------------------------------------------------------- public -- */
+bool mc3d_skin_is_slim(cairo_surface_t *skin)
+{
+    if (!skin || cairo_image_surface_get_width(skin) != 64 || cairo_image_surface_get_height(skin) != 64)
+        return false;
+    cairo_surface_flush(skin);
+    const uint32_t *px = (const uint32_t *)cairo_image_surface_get_data(skin);
+    int st = cairo_image_surface_get_stride(skin) / 4;
+    /* right arm front+back, columns 54-55, and the left arm's 46-47 (rows 52-63) */
+    for (int y = 20; y < 32; y++)
+        for (int x = 54; x < 56; x++)
+            if (px[y * st + x] >> 24)
+                return false;
+    for (int y = 52; y < 64; y++)
+        for (int x = 46; x < 48; x++)
+            if (px[y * st + x] >> 24)
+                return false;
+    return true;
+}
+
 void mc3d_init(mc3d_t *v)
 {
     memset(v, 0, sizeof *v);
@@ -350,7 +369,7 @@ void mc3d_draw(mc3d_t *v, cairo_t *cr, int w, int h, const double sh[3])
     cairo_surface_flush(v->skin);
     cairo_surface_t *k = v->skin;
     bool legacy = cairo_image_surface_get_height(k) == 32;
-    int aw = v->slim ? 3 : 4;
+    int aw = v->slim || mc3d_skin_is_slim(k) ? 3 : 4;
     double t = v->t;
     double breathe = v->still ? 0 : sin(t * 1.9) * 0.04;
     double swing = v->still ? 0 : sin(t * 1.1) * 0.06;

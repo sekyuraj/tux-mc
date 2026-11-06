@@ -55,6 +55,7 @@ jobs:
             (Join-Path $prism 'prismlauncher.exe'),
             (Join-Path $prism 'instances\26.3\mmc-pack.json'),
             (Join-Path $prism 'instances\26.3\minecraft\mods\tuxmc.jar'),
+            (Get-ChildItem (Join-Path $prism 'instances\26.3\minecraft\mods') -Filter 'sodium-*.jar' | Select-Object -First 1 -ExpandProperty FullName),
             (Join-Path $prism 'themes\tux\theme.json')
           )
           foreach ($f in $need) { if (-not (Test-Path $f)) { throw "missing: $f" } else { "ok: $f" } }

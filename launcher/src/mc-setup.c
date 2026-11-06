@@ -304,17 +304,18 @@ static void prism_settings(app_t *a)
     g_free(path);
 }
 
-/* the newest Fabric API for Minecraft mc into mods (sha512-checked); the
- * Instances page uses it for new instances too */
-bool mc_fabric_api(const char *mods, const char *mc, char **err)
+/* the newest Fabric build of a Modrinth project (slug) for Minecraft mc into
+ * mods, sha512-checked; skipped when a jar starting with prefix is there */
+bool mc_modrinth_mod(const char *mods, const char *slug, const char *title, const char *prefix, const char *mc,
+                     char **err)
 {
-    if (has_jar(mods, "fabric-api"))
+    if (has_jar(mods, prefix))
         return true;
-    say_bg("Downloading Fabric API…");
+    say_bg("Downloading %s…", title);
     JsonNode *root;
     char *esc = g_uri_escape_string(mc, NULL, FALSE);
-    char *q = g_strdup_printf("https://api.modrinth.com/v2/project/fabric-api/version?loaders=%%5B%%22fabric%%22%%5D"
-                              "&game_versions=%%5B%%22%s%%22%%5D", esc);
+    char *q = g_strdup_printf("https://api.modrinth.com/v2/project/%s/version?loaders=%%5B%%22fabric%%22%%5D"
+                              "&game_versions=%%5B%%22%s%%22%%5D", slug, esc);
     JsonParser *p = get_json(q, &root);
     g_free(q);
     g_free(esc);
@@ -330,7 +331,7 @@ bool mc_fabric_api(const char *mods, const char *mc, char **err)
     }
     if (!file) {
         g_object_unref(p);
-        *err = g_strdup_printf("no Fabric API for %s on Modrinth", mc);
+        *err = g_strdup_printf("no %s for %s on Modrinth", title, mc);
         return false;
     }
     const char *url = json_object_get_string_member(file, "url");
@@ -345,7 +346,7 @@ bool mc_fabric_api(const char *mods, const char *mc, char **err)
         char *sum = g_file_get_contents(path, &data, &len, NULL)
                         ? g_compute_checksum_for_data(G_CHECKSUM_SHA512, (guchar *)data, len) : NULL;
         if (!sum || g_ascii_strcasecmp(sum, want)) {
-            *err = g_strdup("the Fabric API download is damaged");
+            *err = g_strdup_printf("the %s download is damaged", title);
             g_remove(path);
             ok = false;
         }
@@ -355,6 +356,11 @@ bool mc_fabric_api(const char *mods, const char *mc, char **err)
     g_free(path);
     g_object_unref(p);
     return ok;
+}
+
+bool mc_fabric_api(const char *mods, const char *mc, char **err)
+{
+    return mc_modrinth_mod(mods, "fabric-api", "Fabric API", "fabric-api", mc, err);
 }
 
 static bool make_instance(app_t *a, char **err)
@@ -375,7 +381,10 @@ static bool make_instance(app_t *a, char **err)
         g_file_set_contents(pack, PACK, -1, NULL);
     g_free(pack);
 
-    bool ok = mc_fabric_api(mods, MC_VERSION, err);
+    /* Fabric API, and Sodium: tuxmc's render distance slider goes to 256 and
+     * Sodium is what makes that drawable */
+    bool ok = mc_fabric_api(mods, MC_VERSION, err) &&
+              mc_modrinth_mod(mods, "sodium", "Sodium", "sodium", MC_VERSION, err);
     if (ok && !has_jar(mods, "tuxmc")) {
         say_bg("Downloading tuxmc…");
         char *jar = g_build_filename(mods, "tuxmc.jar", NULL);

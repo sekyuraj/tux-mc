@@ -84,20 +84,25 @@ EOF
 fi
 mkdir -p "$MC/mods"
 
-# ---- Fabric API from Modrinth (checked against its sha512)
-if ! ls "$MC/mods"/fabric-api-*.jar >/dev/null 2>&1; then
-    say "downloading Fabric API for 26.3"
-    json=$(curl -fsSL -G https://api.modrinth.com/v2/project/fabric-api/version \
+# ---- Fabric API and Sodium from Modrinth (checked against their sha512).
+# Sodium comes with the client: tuxmc's render distance slider goes to 256.
+modrinth() {                     # slug title jar-prefix
+    ls "$MC/mods/$3"*.jar >/dev/null 2>&1 && return 0
+    say "downloading $2 for 26.3"
+    local json url sum f
+    json=$(curl -fsSL -G "https://api.modrinth.com/v2/project/$1/version" \
         --data-urlencode 'loaders=["fabric"]' --data-urlencode 'game_versions=["26.3"]')
     url=$(grep -o '"url":"[^"]*\.jar"' <<<"$json" | head -1 | cut -d'"' -f4)
     sum=$(grep -o '"sha512":"[0-9a-f]*"' <<<"$json" | head -1 | cut -d'"' -f4)
-    [[ -n $url && -n $sum ]] || die "no Fabric API for 26.3 on Modrinth"
+    [[ -n $url && -n $sum ]] || die "no $2 for 26.3 on Modrinth"
     f=${url##*/}
     f=${f//%2B/+}
     curl -fsSL -o "$MC/mods/$f.part" "$url"
-    echo "$sum  $MC/mods/$f.part" | sha512sum -c --quiet - || die "Fabric API download is corrupt"
+    echo "$sum  $MC/mods/$f.part" | sha512sum -c --quiet - || die "$2 download is corrupt"
     mv "$MC/mods/$f.part" "$MC/mods/$f"
-fi
+}
+modrinth fabric-api "Fabric API" fabric-api-
+modrinth sodium Sodium sodium-
 
 # ---- the mod
 if (( BUILD )); then

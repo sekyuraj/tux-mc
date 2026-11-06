@@ -144,20 +144,25 @@ if (-not (Test-Path (Join-Path $InstDir 'mmc-pack.json'))) {
     Copy-Item (Join-Path $Here 'mmc-pack.json') (Join-Path $InstDir 'mmc-pack.json')
 }
 
-if (-not (Get-ChildItem $Mods -Filter 'fabric-api-*.jar' -ErrorAction SilentlyContinue)) {
-    Say 'Downloading Fabric API'
+# Fabric API, and Sodium (it comes with the client: tuxmc's render distance
+# slider goes to 256)
+function Get-Modrinth($Slug, $Title, $Prefix) {
+    if (Get-ChildItem $Mods -Filter "$Prefix*.jar" -ErrorAction SilentlyContinue) { return }
+    Say "Downloading $Title"
     $q = 'loaders=%5B%22fabric%22%5D&game_versions=%5B%22' + $Inst + '%22%5D'
-    $v = Invoke-RestMethod "https://api.modrinth.com/v2/project/fabric-api/version?$q" -Headers $UA
-    if (-not $v) { throw "no Fabric API for $Inst on Modrinth" }
+    $v = Invoke-RestMethod "https://api.modrinth.com/v2/project/$Slug/version?$q" -Headers $UA
+    if (-not $v) { throw "no $Title for $Inst on Modrinth" }
     $f = $v[0].files | Where-Object primary | Select-Object -First 1
     if (-not $f) { $f = $v[0].files[0] }
     $out = Join-Path $Mods $f.filename
     Invoke-WebRequest $f.url -OutFile $out -Headers $UA -UseBasicParsing
     if ((Get-FileHash $out -Algorithm SHA512).Hash -ne $f.hashes.sha512.ToUpper()) {
         Remove-Item $out
-        throw 'the Fabric API download is damaged'
+        throw "the $Title download is damaged"
     }
 }
+Get-Modrinth 'fabric-api' 'Fabric API' 'fabric-api-'
+Get-Modrinth 'sodium' 'Sodium' 'sodium-'
 
 Say 'Downloading the tuxmc mod (latest release)'
 $jar = Join-Path $Mods 'tuxmc.jar.part'
