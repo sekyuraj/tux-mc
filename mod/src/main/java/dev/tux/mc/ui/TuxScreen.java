@@ -484,7 +484,55 @@ public class TuxScreen extends Screen {
 
     /* ---------------------------------------------------------------- capes */
 
+    private String hoverCape;
+
+    /** you, turning slowly, wearing the hovered cape (or the chosen one) */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void capePreview(GuiGraphicsExtractor g, int x, int y, int w, int h, float al) {
+        Draw.panel(g, x, y, w, h, Theme.alpha(Theme.bgAlt, al), Theme.alpha(Theme.surface, al));
+        var p = minecraft.player;
+        if (p == null || al < 0.05f)
+            return;
+        String id = hoverCape != null ? hoverCape : Config.cape;
+        net.minecraft.client.renderer.entity.state.EntityRenderState st;
+        Capes.previewId = id;
+        try {
+            net.minecraft.client.renderer.entity.EntityRenderer r = minecraft.getEntityRenderDispatcher().getRenderer(p);
+            st = (net.minecraft.client.renderer.entity.state.EntityRenderState) r.createRenderState(p, 1f);
+        } finally {
+            Capes.previewId = null;
+        }
+        st.shadowPieces.clear();
+        st.outlineColor = 0;
+        if (st instanceof net.minecraft.client.renderer.entity.state.AvatarRenderState av && id.equals("none"))
+            av.showCape = false;
+        if (st instanceof net.minecraft.client.renderer.entity.state.LivingEntityRenderState l) {
+            /* a slow turn that lingers on the back, where the cape is */
+            float t = Draw.now() - openedAt;
+            l.bodyRot = 180f + (float) (Math.sin(t * 0.7) * 70.0) + 180f;
+            l.yRot = 0;
+            l.xRot = 0;
+            l.boundingBoxWidth /= l.scale;
+            l.boundingBoxHeight /= l.scale;
+            l.scale = 1;
+        }
+        int size = Math.max(20, Math.min((int) (h * 0.36f), (int) (w * 0.8f)));
+        org.joml.Quaternionf rot = new org.joml.Quaternionf().rotateZ((float) Math.PI);
+        org.joml.Quaternionf cam = new org.joml.Quaternionf().rotateX((float) Math.toRadians(-8));
+        rot.mul(cam);
+        org.joml.Vector3f tr = new org.joml.Vector3f(0, st.boundingBoxHeight / 2f + 0.0625f, 0);
+        g.entity(st, size, tr, rot, cam, x + 2, y + 2, x + w - 2, y + h - 2);
+        String name = id.equals("official") ? "Mojang" : id.equals("none") ? "None" : Capes.ALL.getOrDefault(id, id);
+        g.centeredText(font, name, x + w / 2, y + h - 12, Theme.alpha(hoverCape != null ? Theme.subtext : Theme.fg, al));
+    }
+
     private void capes(GuiGraphicsExtractor g, int x, int y, int w, int h, int mx, int my, float al, float dt) {
+        /* the preview on the left, the capes on the right */
+        int pvw = Math.min(110, w / 3);
+        capePreview(g, x, y + 16, pvw, h - 16, al);
+        x += pvw + 10;
+        w -= pvw + 10;
+        String hovered = null;
         g.text(font, font.plainSubstrByWidth(Config.cape.equals("image") && Config.capeImage.isBlank()
                 ? "Picture: choose the image in the launcher (Home, client cape)." : Config.sync ? "Other tux-mc players see these too (Settings, Sharing)." : "Only you see these: sharing is off in Settings.", w), x, y,
                 Theme.alpha(Theme.dim, al), false);
@@ -492,12 +540,14 @@ public class TuxScreen extends Screen {
         ids.add("official");
         ids.addAll(Capes.ALL.keySet());
         ids.add("none");
-        int cols = 5, gap = 8, rows = (ids.size() + cols - 1) / cols;
+        int cols = 4, gap = 6, rows = (ids.size() + cols - 1) / cols;
         int bw = (w - gap * (cols - 1)) / cols, bh = Math.min(82, (h - 16 - gap * (rows - 1)) / rows);
         int i = 0;
         for (String id : ids) {
             int bx = x + (i % cols) * (bw + gap), by = y + 16 + (i / cols) * (bh + gap);
             boolean hov = mx >= bx && mx < bx + bw && my >= by && my < by + bh;
+            if (hov)
+                hovered = id;
             boolean on = Config.cape.equals(id);
             float a = anim("cape" + id, hov ? 1 : 0, dt, 14);
             float s = anim("capesel" + id, on ? 1 : 0, dt, 10);
@@ -526,6 +576,7 @@ public class TuxScreen extends Screen {
             }));
             i++;
         }
+        hoverCape = hovered;
     }
 
     /* ---------------------------------------------------------------- settings */

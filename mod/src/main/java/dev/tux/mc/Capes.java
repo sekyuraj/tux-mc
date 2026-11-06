@@ -51,9 +51,13 @@ public final class Capes {
 
     public static void themeChanged() { themeDirty = true; }
 
+    /** set only while the tux menu builds its preview player: that cape instead of yours */
+    public static String previewId;
+
     /** null = no custom cape (official / none) */
     public static ClientAsset.Texture current() {
-        return ALL.containsKey(Config.cape) ? get(Config.cape) : null;
+        String id = previewId != null ? previewId : Config.cape;
+        return ALL.containsKey(id) ? get(id) : null;
     }
 
     private static void invalidate() {

@@ -8,15 +8,36 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The desktop theme (~/.config/themes/current/theme.sh), re-read when it changes.
- * Without one it falls back to the black palette. ARGB ints.
+ * The colours: the launcher's theme preset (Settings, Themes, Apply writes
+ * <config>/tux-mc/theme.sh) or the desktop theme (~/.config/themes/current/
+ * theme.sh), whichever changed last; re-read when it changes. Without either,
+ * the black palette. ARGB ints.
  */
 public final class Theme {
     public static int bg, bgAlt, surface, selection, muted, dim, subtext, fg, fgBright,
             accent, accentBright, urgent, warn;
     public static String name = "default";
 
-    private static final Path FILE = Path.of(System.getProperty("user.home"), ".config/themes/current/theme.sh");
+    private static final Path DESKTOP = Path.of(System.getProperty("user.home"), ".config/themes/current/theme.sh");
+    private static final Path LAUNCHER = launcherFile();
+
+    /* where the launcher keeps its config: g_get_user_config_dir() */
+    private static Path launcherFile() {
+        String local = System.getenv("LOCALAPPDATA");
+        if (System.getProperty("os.name", "").toLowerCase().contains("win") && local != null)
+            return Path.of(local, "tux-mc", "theme.sh");
+        String xdg = System.getenv("XDG_CONFIG_HOME");
+        return xdg != null && !xdg.isBlank() ? Path.of(xdg, "tux-mc", "theme.sh")
+                : Path.of(System.getProperty("user.home"), ".config", "tux-mc", "theme.sh");
+    }
+
+    private static long mtime(Path f) {
+        try {
+            return Files.getLastModifiedTime(f.toRealPath()).toMillis();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
     private static final Pattern LINE = Pattern.compile("^\\s*([a-z_]+)=\"?#([0-9a-fA-F]{6})\"?");
     private static long stamp = -1;
 
@@ -24,18 +45,15 @@ public final class Theme {
 
     /** cheap: only re-parses when the file's mtime moved (theme switch) */
     public static void reload() {
-        long m;
-        try {
-            m = Files.getLastModifiedTime(FILE.toRealPath()).toMillis();
-        } catch (Exception e) {
-            m = 0;
-        }
+        long d = mtime(DESKTOP), l0 = mtime(LAUNCHER);
+        Path file = l0 > d ? LAUNCHER : DESKTOP;
+        long m = Math.max(d, l0) * 2 + (l0 > d ? 1 : 0);
         if (m == stamp)
             return;
         stamp = m;
         Map<String, Integer> v = new HashMap<>();
         try {
-            for (String l : Files.readAllLines(FILE)) {
+            for (String l : Files.readAllLines(file)) {
                 Matcher x = LINE.matcher(l);
                 if (x.find())
                     v.put(x.group(1), 0xFF000000 | Integer.parseInt(x.group(2), 16));

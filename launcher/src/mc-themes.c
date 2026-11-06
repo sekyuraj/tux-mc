@@ -278,10 +278,23 @@ static void on_apply(GtkButton *b, gpointer data)
     char *path = g_build_filename(dir, "style.css", NULL);
     char *css = render(TUX_STYLE_TEMPLATE, &T.cur, "tux");
     bool ok = g_file_set_contents(path, css, -1, NULL);
+    /* the same colours for the mod's right-shift menu (Theme.java reads this) */
+    GString *pal = g_string_new("# written by tux-mc (Settings, Themes): the in-game menu's colours\n");
+    char *qn = g_strescape(gtk_editable_get_text(GTK_EDITABLE(T.name)), NULL);
+    g_string_append_printf(pal, "name=\"%s\"\n", qn);
+    g_free(qn);
+    for (int k = 0; k < NKEYS; k++)
+        g_string_append_printf(pal, "%s=\"%s\"\n", KEYS[k].key, T.cur.col[k]);
+    char *palp = g_build_filename(dir, "theme.sh", NULL);
+    if (ok)
+        g_file_set_contents(palp, pal->str, -1, NULL);
+    g_free(palp);
+    g_string_free(pal, TRUE);
     char *note = NULL;
     if (ok)
         write_prism(gtk_editable_get_text(GTK_EDITABLE(T.name)), &note);
-    char *m = g_strdup_printf(ok ? "Applied.%s" : "Couldn't write %s", ok ? (note ? note : "") : path);
+    char *m = g_strdup_printf(ok ? "Applied, in game too (the right-shift menu).%s" : "Couldn't write %s",
+                              ok ? (note ? note : "") : path);
     gtk_label_set_text(GTK_LABEL(T.msg), m);
     mc_cfg_set_str("theme_preset", gtk_editable_get_text(GTK_EDITABLE(T.name)));
     g_free(m);

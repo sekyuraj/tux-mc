@@ -91,7 +91,7 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 - **Mods**: list, turn on and off, delete, drop in jars, and search and install from Modrinth.
 - **Configs**: an editor for mod configs.
 - **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
-- **Themes**: colour presets for the launcher and Prism. Built-in ones, your own (saved in `~/.config/tux-mc/presets/`), and your desktop themes if you use `~/.config/themes`. Picking one previews it; Apply keeps it.
+- **Themes**: colour presets for the launcher and Prism. Built-in ones, your own (saved in `~/.config/tux-mc/presets/`), and your desktop themes if you use `~/.config/themes`. Picking one previews it; Apply keeps it, and the in-game right-shift menu takes the same colours.
 - **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
 - Ctrl+1..7 switches pages.
 
