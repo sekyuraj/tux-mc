@@ -13,6 +13,10 @@ tag=v$V
 grep -q "\"version\": \"$V\"" "$D/mod/src/main/resources/fabric.mod.json" ||
     { echo "fabric.mod.json doesn't say $V"; exit 1; }
 git -C "$D" diff --quiet HEAD || { echo "commit first"; exit 1; }
+if gh release view "$tag" -R sekyuraj/tux-mc >/dev/null 2>&1; then
+    echo "$tag is released already: raise VERSION and fabric.mod.json, commit, run again"
+    exit 1
+fi
 
 "$D/mod/build.sh" --no-install
 mkdir -p "$D/dist"
