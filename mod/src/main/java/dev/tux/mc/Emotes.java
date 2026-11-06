@@ -4,7 +4,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 
 import org.joml.Matrix4f;
 
-import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
@@ -15,11 +14,11 @@ import net.minecraft.client.renderer.entity.state.AvatarRenderState;
  */
 public final class Emotes {
     public enum Emote {
-        WAVE("Wave", 2.6f), DANCE("Dance", 0), SIT("Sit", 0), LAY("Lay", 0),
-        CLAP("Clap", 2.4f), SPIN("Spin", 1.5f), BOW("Bow", 2.2f), DAB("Dab", 1.8f);
+        WAVE("Wave", 0), DANCE("Dance", 0), SIT("Sit", 0), LAY("Lay", 0),
+        CLAP("Clap", 0), SPIN("Spin", 0), BOW("Bow", 2.2f), DAB("Dab", 1.8f);
 
         public final String title;
-        public final float length;        /* seconds, 0 = until you move */
+        public final float length;        /* seconds, 0 = keeps going until you move */
 
         Emote(String title, float length) {
             this.title = title;
@@ -36,8 +35,9 @@ public final class Emotes {
 
     public static Emote current;
     private static long started;
-    private static CameraType restoreCamera;
     private static double sx, sz;
+    /** one turn of the spin, seconds: it keeps turning, easing between turns */
+    private static final float SPIN_TURN = 1.5f;
 
     public static void play(Emote e) {
         Minecraft mc = Minecraft.getInstance();
@@ -52,27 +52,21 @@ public final class Emotes {
         Sync.sendEmote(e);
         sx = mc.player.getX();
         sz = mc.player.getZ();
-        if (Config.emoteCamera && restoreCamera == null && mc.options.getCameraType() == CameraType.FIRST_PERSON) {
-            restoreCamera = CameraType.FIRST_PERSON;
-            mc.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
-        }
+        /* the camera stays as it is: F5 if you want to watch yourself */
     }
 
     public static void stop() {
         if (current != null)
             Sync.sendEmote(null);
         current = null;
-        if (restoreCamera != null) {
-            Minecraft.getInstance().options.setCameraType(restoreCamera);
-            restoreCamera = null;
-        }
     }
 
     public static float time() {
         return (System.nanoTime() - started) / 1e9f;
     }
 
-    /** client tick: timed emotes end, any emote ends when you walk off or jump */
+    /** client tick: timed emotes run out; the rest keep going until you move,
+     *  jump, sneak, sprint, or press Esc (being pushed away ends them too) */
     public static void tick(Minecraft mc) {
         if (current == null)
             return;
@@ -80,8 +74,12 @@ public final class Emotes {
             stop();
             return;
         }
+        var o = mc.options;
+        boolean keys = o.keyUp.isDown() || o.keyDown.isDown() || o.keyLeft.isDown() || o.keyRight.isDown()
+                || o.keyJump.isDown() || o.keyShift.isDown() || o.keySprint.isDown()
+                || mc.gui.screen() instanceof net.minecraft.client.gui.screens.PauseScreen;
         double moved = Math.hypot(mc.player.getX() - sx, mc.player.getZ() - sz);
-        if ((current.length > 0 && time() > current.length) || moved > 0.35
+        if (keys || (current.length > 0 && time() > current.length) || moved > 0.35
                 || mc.player.getDeltaMovement().y > 0.2 || mc.player.isPassenger())
             stop();
     }
@@ -182,9 +180,9 @@ public final class Emotes {
             ps.mulPose(new Matrix4f().rotationX((float) Math.toRadians(90 * k)));
         }
         case SPIN -> {
-            float a = t / Emote.SPIN.length;
+            float a = (t % SPIN_TURN) / SPIN_TURN;
             float k = a < 0.5f ? 2 * a * a : 1 - (float) Math.pow(-2 * a + 2, 2) / 2;
-            ps.mulPose(new Matrix4f().rotationY((float) Math.toRadians(720 * k)));
+            ps.mulPose(new Matrix4f().rotationY((float) Math.toRadians(360 * k)));
         }
         case DANCE -> ps.translate(0, Math.abs(Math.sin(t * 7)) * 0.07f, 0);
         default -> {}

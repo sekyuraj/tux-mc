@@ -31,7 +31,6 @@ public final class Config {
     public static boolean zoomSmooth = true;
     public static float zoomFov = 0.25f;
     public static boolean zoomToggle = false;       /* press once instead of holding */
-    public static boolean emoteCamera = true;
     public static String cape = "tux";              /* a Capes id, "official" or "none" */
     public static String capeImage = "";            /* png for the "image" cape */
     /* sharing: capes + emotes for other tux-mc players, over public Nostr relays */

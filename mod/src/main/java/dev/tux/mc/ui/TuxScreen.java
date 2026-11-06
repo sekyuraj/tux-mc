@@ -454,9 +454,9 @@ public class TuxScreen extends Screen {
     /* ---------------------------------------------------------------- emotes */
 
     private void emotes(GuiGraphicsExtractor g, int x, int y, int w, int h, int mx, int my, float al, float dt) {
-        g.text(font, font.plainSubstrByWidth("Press . in game for the wheel. Walking or jumping ends one.", w), x, y,
+        g.text(font, font.plainSubstrByWidth("Press . for the wheel. Moving, jumping, sneaking or Esc stops one.", w), x, y,
                 Theme.alpha(Theme.dim, al), false);
-        g.text(font, font.plainSubstrByWidth("Only you see them; others would need a server plugin.", w), x, y + 10,
+        g.text(font, font.plainSubstrByWidth("Other tux-mc players see them too (Settings, Sharing).", w), x, y + 10,
                 Theme.alpha(Theme.muted, al), false);
         int cols = 4, gap = 8;
         int bw = (w - gap * (cols - 1)) / cols, bh = 46;
@@ -623,8 +623,6 @@ public class TuxScreen extends Screen {
                 Config.zoomToggle ? "toggle" : "hold", () -> Config.zoomToggle = !Config.zoomToggle);
         toggle(g, x, y0, w, mx, my, al, dt, "Smooth zoom", "ease in and out", Config.zoomSmooth,
                 () -> Config.zoomSmooth = !Config.zoomSmooth);
-        toggle(g, x, y0, w, mx, my, al, dt, "Emote camera", "switch to front view while emoting", Config.emoteCamera,
-                () -> Config.emoteCamera = !Config.emoteCamera);
         int total = rowY(0) + 6;
         scrollMax = Math.max(0, total - h);
         if (scrollMax > 0) {                       /* scrollbar */

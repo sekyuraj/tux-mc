@@ -26,13 +26,15 @@ import net.minecraft.resources.Identifier;
 
 public class TuxMc implements ClientModInitializer {
     public static final Logger LOG = LoggerFactory.getLogger("tuxmc");
-    public static KeyMapping zoomKey, emoteKey, menuKey, brightKey, hudKey;
+    public static KeyMapping zoomKey, scrollZoomKey, emoteKey, menuKey, brightKey, hudKey;
 
     @Override
     public void onInitializeClient() {
         Config.load();
         var cat = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("tuxmc", "main"));
         zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.zoom", InputConstants.KEY_C, cat));
+        scrollZoomKey = KeyMappingHelper.registerKeyMapping(
+                new KeyMapping("key.tuxmc.scrollzoom", InputConstants.KEY_GRAVE, cat));
         emoteKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.emotes", InputConstants.KEY_PERIOD, cat));
         menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.menu", InputConstants.KEY_RSHIFT, cat));
         brightKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.fullbright", InputConstants.UNKNOWN.getValue(), cat));
@@ -162,6 +164,7 @@ public class TuxMc implements ClientModInitializer {
         } else {
             Zoom.held = zoomKey.isDown() && mc.gui.screen() == null;
         }
+        Zoom.scrollHeld = scrollZoomKey.isDown() && mc.gui.screen() == null;
         while (brightKey.consumeClick()) {
             Config.fullbright = !Config.fullbright;
             Config.save();

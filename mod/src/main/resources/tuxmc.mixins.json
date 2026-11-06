@@ -19,7 +19,8 @@
     "TicketRangeMixin",
     "ChunkPriorityMixin",
     "TicketLevelMixin",
-    "TicketViewMixin"
+    "TicketViewMixin",
+    "ScrollZoomMixin"
   ],
   "injectors": {
     "defaultRequire": 1
