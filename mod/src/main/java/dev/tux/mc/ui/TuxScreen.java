@@ -563,6 +563,8 @@ public class TuxScreen extends Screen {
         toggle(g, x, y0, w, mx, my, al, dt, "Streamer mode", "hide coordinates everywhere", Config.streamer,
                 () -> Config.streamer = !Config.streamer);
         section(g, x, y0, "Servers", al);
+        toggle(g, x, y0, w, mx, my, al, dt, "Distant Horizons on servers", "with shaders it crashes AMD drivers on join",
+                Config.dhOnServers, () -> Config.dhOnServers = !Config.dhOnServers);
         cycle(g, x, y0, w, mx, my, al, dt, "Queue alert", "notify (also on the desktop) at this position",
                 "at " + Config.queueAlert, () -> Config.queueAlert = switch (Config.queueAlert) {
                     case 10 -> 25;

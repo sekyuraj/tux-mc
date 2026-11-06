@@ -49,6 +49,10 @@ public class TuxMc implements ClientModInitializer {
             if (screen instanceof DisconnectedScreen)
                 addReconnect(screen, w, h);
         });
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.INIT.register(
+                (handler, client) -> DhCompat.connecting(client));
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, client) -> DhCompat.disconnected());
         ClientReceiveMessageEvents.GAME.register((msg, overlay) -> ServerTools.chat(msg));
         ClientReceiveMessageEvents.CHAT.register((msg, signed, sender, type, ts) -> ServerTools.chat(msg));
         LOG.info("tuxmc loaded");

@@ -36,8 +36,8 @@ public final class Emotes {
     public static Emote current;
     private static long started;
     private static double sx, sz;
-    /** one turn of the spin, seconds: it keeps turning, easing between turns */
-    private static final float SPIN_TURN = 1.5f;
+    /** spin speed, degrees per second, after a short wind-up */
+    private static final float SPIN_SPEED = 900f;
 
     public static void play(Emote e) {
         Minecraft mc = Minecraft.getInstance();
@@ -179,14 +179,68 @@ public final class Emotes {
             ps.translate(0, 0.14f * k, 0);
             ps.mulPose(new Matrix4f().rotationX((float) Math.toRadians(90 * k)));
         }
-        case SPIN -> {
-            float a = (t % SPIN_TURN) / SPIN_TURN;
-            float k = a < 0.5f ? 2 * a * a : 1 - (float) Math.pow(-2 * a + 2, 2) / 2;
-            ps.mulPose(new Matrix4f().rotationY((float) Math.toRadians(360 * k)));
-        }
+        case SPIN -> ps.mulPose(new Matrix4f().rotationY((float) Math.toRadians(spinAngle(t) % 360)));
         case DANCE -> ps.translate(0, Math.abs(Math.sin(t * 7)) * 0.07f, 0);
         default -> {}
         }
+    }
+
+    /** constant fast turning; it winds up over the first 0.4 s (same speed where they meet) */
+    private static float spinAngle(float t) {
+        return t < 0.4f ? SPIN_SPEED * t * t / 0.8f : SPIN_SPEED * (t - 0.2f);
+    }
+
+    /**
+     * First person: your own arms, moved for the emote, before the arm is put in
+     * place (view space, x right, y up, z towards you). right = which arm.
+     * Returns false to leave that arm out.
+     */
+    public static boolean firstPersonArm(PoseStack ps, Emote e, float t, boolean right) {
+        float s = right ? 1 : -1, ease = Math.min(1, t * 5);
+        switch (e) {
+        case WAVE -> {
+            if (right) {
+                ps.translate(0.02f, 0.42f * ease, 0.05f);
+                roll(ps, (float) Math.sin(t * 11) * 22f * ease, 0.56f, -0.2f, -0.72f);
+            } else {
+                ps.translate(0, -0.12f * ease, 0);
+            }
+        }
+        case CLAP -> {
+            float g = (float) Math.abs(Math.cos(t * 7.5));
+            ps.translate(-s * (0.36f - 0.16f * g) * ease, 0.14f * ease, -0.05f * ease);
+            roll(ps, -s * 12f * ease, 0.6f * s, -0.6f, -0.72f);
+        }
+        case DANCE -> {
+            float b = (float) Math.sin(t * 7), up = Math.max(0, s * b);
+            ps.translate(0, (up * 0.45f - 0.05f) * ease, 0);
+            roll(ps, s * up * 28f * ease, 0.6f * s, -0.6f, -0.72f);
+        }
+        case SPIN -> {
+            ps.translate(s * 0.22f * ease, (0.12f + (float) Math.sin(t * 9) * 0.03f) * ease, 0);
+            roll(ps, -s * 24f * ease, 0.6f * s, -0.6f, -0.72f);
+        }
+        case SIT -> ps.translate(0, -0.15f * ease, 0.04f * ease);
+        case LAY -> ps.translate(0, -0.3f * ease, 0.06f * ease);
+        case BOW -> ps.translate(0, -0.3f * bowAmount(t), 0.1f * bowAmount(t));
+        case DAB -> {
+            if (right) {
+                ps.translate(-0.42f * ease, 0.3f * ease, 0.05f * ease);
+                roll(ps, 35f * ease, 0.6f, -0.6f, -0.72f);
+            } else {
+                ps.translate(-0.08f * ease, 0.36f * ease, 0);
+                roll(ps, -40f * ease, -0.6f, -0.6f, -0.72f);
+            }
+        }
+        }
+        return true;
+    }
+
+    /** turn around the view axis at a point (where the arm sits) */
+    private static void roll(PoseStack ps, float deg, float px, float py, float pz) {
+        ps.translate(px, py, pz);
+        ps.mulPose(new Matrix4f().rotationZ((float) Math.toRadians(deg)));
+        ps.translate(-px, -py, -pz);
     }
 
     private static float lerp(float a, float b, float t) { return a + (b - a) * t; }

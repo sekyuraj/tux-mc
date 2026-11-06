@@ -21,6 +21,7 @@ public final class Config {
     public static boolean hudArmor = true;          /* armor durability, totems, elytra */
     public static boolean hudServer = true;         /* TPS + queue line */
     public static boolean streamer = false;         /* hide coordinates everywhere */
+    public static boolean dhOnServers = false;      /* Distant Horizons on servers (see DhCompat) */
     public static int hudCorner = 0;                /* 0 top left, 1 top right, 2 bottom left, 3 bottom right */
     public static float hudScale = 1f;
     public static float hudOpacity = 0.72f;         /* background of the info box */

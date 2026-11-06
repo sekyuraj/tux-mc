@@ -20,7 +20,8 @@
     "ChunkPriorityMixin",
     "TicketLevelMixin",
     "TicketViewMixin",
-    "ScrollZoomMixin"
+    "ScrollZoomMixin",
+    "FirstPersonEmoteMixin"
   ],
   "injectors": {
     "defaultRequire": 1
