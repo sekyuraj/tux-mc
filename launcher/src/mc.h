@@ -56,7 +56,8 @@ struct app {
 
     /* home */
     mc3d_t view;
-    GtkWidget *stage, *start, *start_label, *none_tile, *tux_chips[32], *sub;
+    GtkWidget *stage, *start, *start_label, *none_tile, *tux_chips[32], *sub, *cape_flow;
+    GPtrArray *pic_chips;                /* the saved picture capes' chips (not owned) */
     double drag_x, drag_y, drag_vx;
     gint64 drag_t;
     gint64 last;
@@ -184,7 +185,8 @@ GtkWidget *mc_themes_card(app_t *a);
 GtkWidget *mc_account_button(app_t *a);
 
 /* mc-capeedit.c: crop/stretch a picture into a cape, then use it */
-void mc_cape_editor(app_t *a, const char *path, void (*done)(app_t *a, const char *saved));
+void mc_cape_editor(app_t *a, const char *path, const char *edit_id, void (*done)(app_t *a, const char *saved));
+char *mc_capes_dir(void);                /* saved picture capes: <data>/tux-mc/capes */
 
 /* mc-update.c: new builds from the GitHub releases */
 GtkWidget *mc_update_card(app_t *a);

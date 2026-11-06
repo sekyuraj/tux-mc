@@ -426,7 +426,7 @@ static const struct { const char *id, *name; } TUX_CAPES[] = {
     {"tux", "Tux"},         {"gentoo", "Gentoo"}, {"steamos", "SteamOS"},  {"arch", "Arch"},
     {"debian", "Debian"},   {"mint", "Mint"},     {"freebsd", "FreeBSD"},  {"openbsd", "OpenBSD"},
     {"lfs", "LFS"},         {"crux", "CRUX"},     {"windows11", "Windows 11"}, {"stars", "Starfield"},  {"synth", "Synthwave"},
-    {"image", "Picture…"},  {"none", "Off"},
+    {"image", "New picture…"},  {"none", "Off"},
 };
 #define NTUX (int)G_N_ELEMENTS(TUX_CAPES)
 _Static_assert(G_N_ELEMENTS(TUX_CAPES) <= G_N_ELEMENTS(((app_t *)0)->tux_chips), "more capes than chip slots");
@@ -569,10 +569,23 @@ void mc_home_refresh_capes(app_t *a)
         gtk_widget_remove_css_class(a->none_tile, "active");
     else
         gtk_widget_add_css_class(a->none_tile, "active");
+    char *img = mc_tuxmc_get(a, "capeImage");
+    bool pic = !g_strcmp0(a->tux_cape, "image"), matched = false;
+    for (guint i = 0; a->pic_chips && i < a->pic_chips->len; i++) {
+        GtkWidget *c = a->pic_chips->pdata[i];
+        bool on = pic && !g_strcmp0(img, g_object_get_data(G_OBJECT(c), "png"));
+        matched |= on;
+        if (on)
+            gtk_widget_add_css_class(c, "active");
+        else
+            gtk_widget_remove_css_class(c, "active");
+    }
+    g_free(img);
     for (int i = 0; i < NTUX; i++) {
         if (!a->tux_chips[i])
             continue;
-        if (!g_strcmp0(a->tux_cape, TUX_CAPES[i].id))
+        bool on = !g_strcmp0(a->tux_cape, TUX_CAPES[i].id) && !(pic && matched);
+        if (on)
             gtk_widget_add_css_class(a->tux_chips[i], "active");
         else
             gtk_widget_remove_css_class(a->tux_chips[i], "active");
@@ -684,12 +697,15 @@ static void set_tux_cape(app_t *a, const char *id)
         mc3d_show_back(&a->view);
 }
 
-/* the editor saved the cape-shaped picture */
+static void fill_cape_chips(app_t *a);
+
+/* the editor saved the cape-shaped picture (a new preset, or one edited again) */
 static void picture_saved(app_t *a, const char *path)
 {
     mc_tuxmc_set(a, "capeImage", path);
+    fill_cape_chips(a);                  /* its chip: new, or with the new picture/name */
     set_tux_cape(a, "image");
-    mc_status(a, "Picture cape: other tux-mc players see it too (if they share pictures)");
+    mc_status(a, "Picture cape saved: right-click it to edit or delete. Other tux-mc players see it too.");
 }
 
 static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
@@ -699,7 +715,7 @@ static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
     if (!f)
         return;
     char *p = g_file_get_path(f);
-    mc_cape_editor(a, p, picture_saved);   /* crop / stretch it first */
+    mc_cape_editor(a, p, NULL, picture_saved);   /* crop / stretch it, name it */
     g_free(p);
     g_object_unref(f);
 }
@@ -774,6 +790,190 @@ static void draw_chip(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer da
     cairo_set_source_surface(cr, s, -2, -2);
     cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_NEAREST);
     cairo_paint(cr);
+}
+
+/* ---- saved picture capes: <data>/tux-mc/capes/<id>.png + <id>.ini ---- */
+
+static void draw_pic_chip(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
+{
+    (void)da;
+    cairo_surface_t *s = data;
+    if (!s || cairo_surface_status(s) != CAIRO_STATUS_SUCCESS)
+        return;
+    double sw = cairo_image_surface_get_width(s), sh = cairo_image_surface_get_height(s);
+    double k = MIN(w / sw, h / sh);
+    cairo_translate(cr, (w - sw * k) / 2, (h - sh * k) / 2);
+    cairo_scale(cr, k, k);
+    cairo_set_source_surface(cr, s, 0, 0);
+    cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD);
+    cairo_paint(cr);
+}
+
+static void on_pic_chip(GtkButton *b, gpointer data)
+{
+    app_t *a = data;
+    mc_tuxmc_set(a, "capeImage", g_object_get_data(G_OBJECT(b), "png"));
+    set_tux_cape(a, "image");
+    mc_status(a, "Cape “%s”: other tux-mc players see it too", (char *)g_object_get_data(G_OBJECT(b), "name"));
+}
+
+static void on_pic_edit(GtkButton *b, gpointer data)
+{
+    app_t *a = data;
+    GtkWidget *chip = g_object_get_data(G_OBJECT(b), "chip");
+    gtk_popover_popdown(GTK_POPOVER(g_object_get_data(G_OBJECT(chip), "menu")));
+    mc_cape_editor(a, g_object_get_data(G_OBJECT(chip), "png"), g_object_get_data(G_OBJECT(chip), "id"),
+                   picture_saved);
+}
+
+static void on_pic_delete(GtkButton *b, gpointer data)
+{
+    app_t *a = data;
+    GtkWidget *chip = g_object_get_data(G_OBJECT(b), "chip");
+    gtk_popover_popdown(GTK_POPOVER(g_object_get_data(G_OBJECT(chip), "menu")));
+    const char *png = g_object_get_data(G_OBJECT(chip), "png");
+    char *name = g_strdup(g_object_get_data(G_OBJECT(chip), "name"));
+    char *ini = g_strdup(png);
+    strcpy(ini + strlen(ini) - 4, ".ini");
+    char *cur = mc_tuxmc_get(a, "capeImage");
+    bool wearing = !g_strcmp0(a->tux_cape, "image") && !g_strcmp0(cur, png);
+    GFile *fp = g_file_new_for_path(png), *fi = g_file_new_for_path(ini);
+    bool ok = g_file_trash(fp, NULL, NULL);       /* the trash, so a slip can be undone */
+    g_file_trash(fi, NULL, NULL);
+    g_object_unref(fp);
+    g_object_unref(fi);
+    if (ok) {
+        if (wearing)
+            set_tux_cape(a, "none");
+        fill_cape_chips(a);
+        mc_home_refresh_capes(a);
+        mc_status(a, "Deleted “%s” (it's in the trash)", name);
+    } else {
+        mc_status(a, "Couldn't delete “%s”", name);
+    }
+    g_free(cur);
+    g_free(ini);
+    g_free(name);
+}
+
+static void on_pic_menu(GtkGestureClick *g, int n, double x, double y, gpointer data)
+{
+    (void)n;
+    (void)x;
+    (void)y;
+    (void)data;
+    GtkWidget *chip = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
+    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
+    gtk_popover_popup(GTK_POPOVER(g_object_get_data(G_OBJECT(chip), "menu")));
+}
+
+static GtkWidget *menu_item(GtkWidget *box, const char *label, GCallback cb, GtkWidget *chip, app_t *a)
+{
+    GtkWidget *b = gtk_button_new_with_label(label);
+    gtk_widget_add_css_class(b, "flat");
+    gtk_label_set_xalign(GTK_LABEL(gtk_button_get_child(GTK_BUTTON(b))), 0);
+    g_object_set_data(G_OBJECT(b), "chip", chip);
+    g_signal_connect(b, "clicked", cb, a);
+    gtk_box_append(GTK_BOX(box), b);
+    return b;
+}
+
+static int pic_cmp(gconstpointer x, gconstpointer y) { return g_strcmp0(*(char *const *)x, *(char *const *)y); }
+
+static GtkWidget *pic_chip(app_t *a, const char *dir, const char *id)
+{
+    char *png = g_strdup_printf("%s%s%s.png", dir, G_DIR_SEPARATOR_S, id);
+    char *inip = g_strdup_printf("%s%s%s.ini", dir, G_DIR_SEPARATOR_S, id);
+    GKeyFile *k = g_key_file_new();
+    char *name = g_key_file_load_from_file(k, inip, G_KEY_FILE_NONE, NULL)
+                     ? g_key_file_get_string(k, "cape", "name", NULL) : NULL;
+    g_key_file_unref(k);
+    g_free(inip);
+    if (!name)
+        name = g_strdup("Picture");
+    cairo_surface_t *sf = cairo_image_surface_create_from_png(png);
+    GtkWidget *b = gtk_button_new();
+    gtk_widget_add_css_class(b, "mcl-chip");
+    gtk_widget_set_tooltip_text(b, "Right-click to edit or delete");
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    GtkWidget *sw = gtk_drawing_area_new();
+    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(sw), 10);
+    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(sw), 16);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(sw), draw_pic_chip, sf, (GDestroyNotify)cairo_surface_destroy);
+    gtk_box_append(GTK_BOX(box), sw);
+    GtkWidget *l = mc_label(name, NULL);
+    gtk_label_set_ellipsize(GTK_LABEL(l), PANGO_ELLIPSIZE_END);
+    gtk_label_set_max_width_chars(GTK_LABEL(l), 9);
+    gtk_box_append(GTK_BOX(box), l);
+    gtk_button_set_child(GTK_BUTTON(b), box);
+    g_object_set_data_full(G_OBJECT(b), "png", png, g_free);
+    g_object_set_data_full(G_OBJECT(b), "id", g_strdup(id), g_free);
+    g_object_set_data_full(G_OBJECT(b), "name", name, g_free);
+    g_signal_connect(b, "clicked", G_CALLBACK(on_pic_chip), a);
+
+    GtkWidget *pop = gtk_popover_new();
+    gtk_widget_set_parent(pop, b);
+    g_signal_connect_swapped(b, "destroy", G_CALLBACK(gtk_widget_unparent), pop);
+    GtkWidget *mb = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    menu_item(mb, "Edit", G_CALLBACK(on_pic_edit), b, a);
+    GtkWidget *del = menu_item(mb, "Delete", G_CALLBACK(on_pic_delete), b, a);
+    gtk_widget_add_css_class(del, "mcl-danger");
+    gtk_popover_set_child(GTK_POPOVER(pop), mb);
+    g_object_set_data(G_OBJECT(b), "menu", pop);
+    GtkGesture *rc = gtk_gesture_click_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(rc), GDK_BUTTON_SECONDARY);
+    g_signal_connect(rc, "pressed", G_CALLBACK(on_pic_menu), a);
+    gtk_widget_add_controller(b, GTK_EVENT_CONTROLLER(rc));
+    return b;
+}
+
+/* built-in capes, then your saved pictures, then "New picture…" and Off */
+static void fill_cape_chips(app_t *a)
+{
+    if (!a->cape_flow)
+        return;
+    gtk_flow_box_remove_all(GTK_FLOW_BOX(a->cape_flow));
+    for (int i = 0; i < NTUX; i++)
+        a->tux_chips[i] = NULL;
+    if (a->pic_chips)
+        g_ptr_array_set_size(a->pic_chips, 0);
+    else
+        a->pic_chips = g_ptr_array_new();
+    char *dir = mc_capes_dir();
+    GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+    GDir *d = g_dir_open(dir, 0, NULL);
+    for (const char *e; d && (e = g_dir_read_name(d));)
+        if (g_str_has_suffix(e, ".png"))
+            g_ptr_array_add(ids, g_strndup(e, strlen(e) - 4));
+    if (d)
+        g_dir_close(d);
+    g_ptr_array_sort(ids, pic_cmp);                 /* picture-<time>: oldest first */
+    for (int i = 0; i < NTUX; i++) {
+        if (!strcmp(TUX_CAPES[i].id, "image"))     /* the saved ones go before "New picture…" */
+            for (guint j = 0; j < ids->len; j++) {
+                GtkWidget *c = pic_chip(a, dir, ids->pdata[j]);
+                g_ptr_array_add(a->pic_chips, c);
+                gtk_flow_box_append(GTK_FLOW_BOX(a->cape_flow), c);
+            }
+        GtkWidget *b = gtk_button_new();
+        gtk_widget_add_css_class(b, "mcl-chip");
+        GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+        GtkWidget *sw = gtk_drawing_area_new();
+        gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(sw), 10);
+        gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(sw), 16);
+        g_object_set_data(G_OBJECT(sw), "app", a);
+        gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(sw), draw_chip, GINT_TO_POINTER(i), NULL);
+        gtk_box_append(GTK_BOX(box), sw);
+        gtk_box_append(GTK_BOX(box), mc_label(TUX_CAPES[i].name, NULL));
+        gtk_button_set_child(GTK_BUTTON(b), box);
+        g_object_set_data(G_OBJECT(b), "idx", GINT_TO_POINTER(i));
+        g_signal_connect(b, "clicked", G_CALLBACK(on_tux_chip), a);
+        a->tux_chips[i] = b;
+        gtk_flow_box_append(GTK_FLOW_BOX(a->cape_flow), b);
+    }
+    g_ptr_array_unref(ids);
+    g_free(dir);
+    mc_home_refresh_capes(a);
 }
 
 /* cape textures: ~/.cache/tux-mc/capes/<id>.png, fetched once */
@@ -1036,23 +1236,8 @@ GtkWidget *mc_page_home(app_t *a)
     gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(flow), 5);
     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(flow), 6);
     gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(flow), 6);
-    for (int i = 0; i < NTUX; i++) {
-        GtkWidget *b = gtk_button_new();
-        gtk_widget_add_css_class(b, "mcl-chip");
-        GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-        GtkWidget *sw = gtk_drawing_area_new();
-        gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(sw), 10);
-        gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(sw), 16);
-        g_object_set_data(G_OBJECT(sw), "app", a);
-        gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(sw), draw_chip, GINT_TO_POINTER(i), NULL);
-        gtk_box_append(GTK_BOX(box), sw);
-        gtk_box_append(GTK_BOX(box), mc_label(TUX_CAPES[i].name, NULL));
-        gtk_button_set_child(GTK_BUTTON(b), box);
-        g_object_set_data(G_OBJECT(b), "idx", GINT_TO_POINTER(i));
-        g_signal_connect(b, "clicked", G_CALLBACK(on_tux_chip), a);
-        a->tux_chips[i] = b;
-        gtk_flow_box_append(GTK_FLOW_BOX(flow), b);
-    }
+    a->cape_flow = flow;
+    fill_cape_chips(a);
     gtk_box_append(GTK_BOX(cc), flow);
     gtk_box_append(GTK_BOX(right), cc);
 
@@ -1285,7 +1470,7 @@ static void build_window(app_t *a)
     mc_home_refresh_capes(a);
     mc_apply_looks(a);
     if (g_getenv("TUX_MC_CAPE_EDIT"))                       /* screenshots */
-        mc_cape_editor(a, g_getenv("TUX_MC_CAPE_EDIT"), picture_saved);
+        mc_cape_editor(a, g_getenv("TUX_MC_CAPE_EDIT"), g_getenv("TUX_MC_CAPE_ID"), picture_saved);
     if (!a->name)
         mc_status(a, "No account in Prism yet: log in there once (Settings → Open Prism).");
     else
