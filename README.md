@@ -59,14 +59,16 @@ Options:
 - **Emote wheel** on `.`: wave, dance, sit, lay, clap, spin, bow, dab. Your camera stays as it is; in first person you see both arms do the emote (F5 to watch all of you). Spin turns fast and keeps turning. Wave, dance, sit, lay, clap and spin keep going until you walk, jump, sneak, sprint or press Esc; bow and dab play once.
 - **Capes**: Tux, Gentoo, SteamOS, Arch, Debian, Mint, FreeBSD, OpenBSD, Linux from Scratch, CRUX, Windows 11, two drawn ones (Starfield, Synthwave), and a cape from your own picture.
 - **Zoom**: hold C, or hold `` ` `` and scroll to zoom in and out (the wheel doesn't change the hotbar while you do). Fullbright, an info HUD, armor and totem counts, and a streamer mode that hides coordinates.
+- **Hats**: the 3D model you made on the launcher's Hats page sits on your head, turns and bobs with it, and hides while you wear a helmet or a mob head (Settings, `hatHideHelmet`).
+- **Title screen picture**: your own picture behind the menus instead of the spinning world, with blur, darkening and a slight drift with the mouse. Set it on the launcher's Settings → Title screen.
 - **Auto reconnect** after a kick.
 - **No block limit** for `/fill`, `/clone` and `/fillbiome` in singleplayer and LAN.
 
 Settings are kept in the instance's `config/tuxmc.properties`, which is re-read while the game runs.
 
-## Other players see your cape and emotes
+## Other players see your cape, hat and emotes
 
-Other tux-mc players on the same server see your client cape and your emotes, and you see theirs. Players without tux-mc see your normal Mojang cape.
+Other tux-mc players on the same server see your client cape, your hat and your emotes, and you see theirs. Players without tux-mc see your normal Mojang cape.
 
 There's no tux-mc server. The data goes through public [Nostr](https://nostr.com) relays (relay.damus.io, nos.lol and relay.primal.net by default):
 
@@ -76,6 +78,8 @@ There's no tux-mc server. The data goes through public [Nostr](https://nostr.com
 - What goes out: your UUID, your cape, your emotes, and a hash of the server address (not the address itself).
 - Every message is signed with your Mojang chat key, the one Mojang gives every Microsoft account. The receiver checks that Mojang issued the key for that UUID, so nobody can put a cape or an emote on someone else. tux-mc gets this key from Mojang itself, so this also works with No Chat Reports installed. The key is only used for these messages and never goes to a Minecraft server.
 - **Picture capes** are shared too. That means uploading your picture, at most about 45 KB, and downloading the pictures of other players near you, so it uses more internet than the built-in capes. Turn it off under Settings → Sharing → Share pictures, and you'll send and receive only the built-in capes.
+
+- **Hats** go out as their own message, compressed. A hat with every cell filled at the fine 32-cell size can't be shared (the launcher tells you); anything normal is a few kilobytes. `syncHats=false` stops showing other people's hats.
 
 To turn all of it off, use Settings → Sharing → Share capes and emotes. You can change the relays with `syncRelays=` in `tuxmc.properties`. Sharing needs a Microsoft account and works on online-mode servers.
 
@@ -88,12 +92,15 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 - **Capes**: switches your official Mojang cape and shows the client capes on the model. "New picture…" opens an editor: name it, drag the picture into place, zoom, stretch or squeeze it on either axis, rotate, flip, and choose what fills the empty space. Each picture cape is saved as its own chip with that name; right-click one to edit it again (everything comes back as you left it) or delete it (it goes to the trash).
 - **Account**: click your name at the bottom of the sidebar for your UUID, signing in again, Prism's account manager and your NameMC page. If your skin is drawn for slim arms but your account says classic (or the other way round), it says so and fixes it with one click.
 - **Skins**: upload a skin, keep a library of them, or copy one from a player by name.
+- **Colours**: wherever you choose a colour (hats, packs, themes, the cape editor) there's a colour wheel: a hue ring round a shade square, a box for hex codes like `#3f86d9`, and an opacity slider where see-through makes sense.
+- **Hats**: build a 3D model on your head, cell by cell. Click your head to add cells, paint, erase, fill, pick colours; mirror left and right is on by default, so you only build one side. Drag empty space to turn the view, scroll to zoom, Ctrl+Z to undo. 16 cells a side (one per skin pixel) or 32 for finer detail, over a space twice as wide as your head and six pixels above it. Start from an empty grid, from one of ten ready ones (top hat, crown, cat ears, halo, horns, party hat, headphones, sunglasses, propeller cap, flower crown), or import a MagicaVoxel `.vox` file. "Wear it" puts it on, in game too, and other tux-mc players see it.
+- **Packs**: make a resource pack without an image editor. Find any of the game's textures by name or by group (blocks, items, mobs, menus …), click it, and draw on it pixel by pixel: draw, erase, fill and pick, with any colour from the colour wheel or one the texture already uses. "Change the colours of the whole texture" has hue, saturation, brightness and contrast. Every change is saved straight into a folder pack in the instance, so in game F3+T shows it; Undo and Reset take changes back. "Use in game" turns the pack on, "Share as zip" makes a file to share.
 - **Mods**: list, turn on and off, delete, drop in jars, and search and install from Modrinth.
 - **Configs**: an editor for mod configs.
-- **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
-- **Themes**: colour presets for the launcher and Prism. Built-in ones, your own (saved in `~/.config/tux-mc/presets/`), and your desktop themes if you use `~/.config/themes`. Picking one previews it; Apply keeps it, and the in-game right-shift menu takes the same colours.
+- **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Title screen, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
+- **Themes**: each preset is shown as a small picture of the launcher in its colours. Click one and it's used at once, in the launcher, in Prism (when Prism is closed) and in the in-game right-shift menu; Undo goes back. To make your own, pick three colours (background, text, accent) or take them from a picture such as your wallpaper; the other ten are worked out from those. "Fine-tune every colour" opens all thirteen. Your own presets are saved in `~/.config/tux-mc/presets/`, and desktop themes from `~/.config/themes` show up too.
 - **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
-- Ctrl+1..7 switches pages.
+- Ctrl+1..9 switches pages.
 
 ## Themes
 

@@ -60,7 +60,7 @@ void mc_status(app_t *a, const char *fmt, ...)
     va_start(ap, fmt);
     char *s = g_strdup_vprintf(fmt, ap);
     va_end(ap);
-    gtk_label_set_text(GTK_LABEL(a->status), s);
+    gtk_label_set_text(GTK_LABEL(a->status), g_getenv("TUX_MC_SHOTS") ? "" : s);
     gtk_widget_remove_css_class(a->status, "show");
     gtk_widget_add_css_class(a->status, "show");
     g_free(s);
@@ -1284,6 +1284,8 @@ static const struct { const char *id, *title, *icon; } PAGES[] = {
     {"instances", "Instances", "view-list-symbolic"},
     {"import", "Import", "folder-download-symbolic"},
     {"skins", "Skins", "avatar-default-symbolic"},
+    {"hats", "Hats", "applications-graphics-symbolic"},
+    {"packs", "Packs", "image-x-generic-symbolic"},
     {"mods", "Mods", "application-x-addon-symbolic"},
     {"configs", "Configs", "document-edit-symbolic"},
     {"settings", "Settings", "preferences-system-symbolic"},
@@ -1429,7 +1431,9 @@ static void build_window(app_t *a)
     GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_vexpand(spacer, TRUE);
     gtk_box_append(GTK_BOX(side), spacer);
-    gtk_box_append(GTK_BOX(side), mc_account_button(a));
+    GtkWidget *acct = mc_account_button(a);
+    gtk_widget_set_visible(acct, !g_getenv("TUX_MC_SHOTS"));   /* screenshots for the website: no name */
+    gtk_box_append(GTK_BOX(side), acct);
     GtkWidget *quit = gtk_button_new_with_label("Close  (Esc)");
     gtk_widget_add_css_class(quit, "mcl-quit");
     g_signal_connect(quit, "clicked", G_CALLBACK(on_close), a);
@@ -1447,6 +1451,9 @@ static void build_window(app_t *a)
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_instances(a), "instances");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_import(a), "import");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_skins(a), "skins");
+    mc_hat_load_worn(a);
+    gtk_stack_add_named(GTK_STACK(a->stack), mc_page_hats(a), "hats");
+    gtk_stack_add_named(GTK_STACK(a->stack), mc_page_packs(a), "packs");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_mods(a), "mods");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_configs(a), "configs");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_settings(a), "settings");

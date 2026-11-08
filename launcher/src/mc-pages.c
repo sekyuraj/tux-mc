@@ -1590,6 +1590,10 @@ GtkWidget *mc_page_settings(app_t *a)
     look_row(a, model, "model_idle", true, "Player breathes", "idle sway and cape swing");
     gtk_box_append(GTK_BOX(c2), model);
 
+    /* title screen */
+    section(stack, "title", "Title screen", &c1, &c2);
+    gtk_box_append(GTK_BOX(c1), mc_menubg_card(a));
+
     /* themes: one wide column */
     section(stack, "themes", "Themes", &c1, &c2);
     gtk_box_set_homogeneous(GTK_BOX(gtk_widget_get_parent(c1)), FALSE);

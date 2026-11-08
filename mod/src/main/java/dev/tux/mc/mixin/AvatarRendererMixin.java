@@ -38,6 +38,7 @@ public class AvatarRendererMixin {
         } else {
             h.tuxmc$set(null, 0);
         }
+        ((dev.tux.mc.Hats.Holder) s).tuxmc$setHat(me ? dev.tux.mc.Hats.own() : dev.tux.mc.Hats.remote(id));
         if (s.skin != null) {
             var cape = me ? Capes.current() : Capes.remote(id, Sync.cape(id));
             if (cape != null) {

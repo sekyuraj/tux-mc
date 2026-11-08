@@ -306,3 +306,189 @@ bool mc_zip_extract(const char *zip, const char *prefix, const char *dest, char 
     fclose(f);
     return ok;
 }
+
+/* ---------------------------------------------- many reads from one zip -- */
+
+struct mc_zip {
+    FILE *f;
+    GPtrArray *all;
+    GHashTable *by_name;                 /* name -> zent_t (not owned) */
+};
+
+mc_zip_t *mc_zip_open(const char *zip)
+{
+    FILE *f = g_fopen(zip, "rb");
+    if (!f)
+        return NULL;
+    GPtrArray *all = entries(f);
+    if (!all) {
+        fclose(f);
+        return NULL;
+    }
+    mc_zip_t *z = g_new0(mc_zip_t, 1);
+    z->f = f;
+    z->all = all;
+    z->by_name = g_hash_table_new(g_str_hash, g_str_equal);
+    for (guint i = 0; i < all->len; i++) {
+        zent_t *e = all->pdata[i];
+        if (!e->dir)
+            g_hash_table_insert(z->by_name, e->name, e);
+    }
+    return z;
+}
+
+GBytes *mc_zip_get(mc_zip_t *z, const char *name)
+{
+    zent_t *e = z ? g_hash_table_lookup(z->by_name, name) : NULL;
+    if (!e)
+        return NULL;
+    GByteArray *b = g_byte_array_new();
+    if (inflate_to(z->f, e, NULL, b, 64u * 1024 * 1024))
+        return g_byte_array_free_to_bytes(b);
+    g_byte_array_unref(b);
+    return NULL;
+}
+
+void mc_zip_names(mc_zip_t *z, void (*each)(const char *name, void *data), void *data)
+{
+    for (guint i = 0; z && i < z->all->len; i++) {
+        zent_t *e = z->all->pdata[i];
+        if (!e->dir)
+            each(e->name, data);
+    }
+}
+
+void mc_zip_close(mc_zip_t *z)
+{
+    if (!z)
+        return;
+    g_hash_table_unref(z->by_name);
+    g_ptr_array_unref(z->all);
+    fclose(z->f);
+    g_free(z);
+}
+
+/* --------------------------------------------------------------- writing -- */
+
+typedef struct {
+    char *name;
+    guint32 crc, csize, usize, offset;
+    guint16 method;
+} went_t;
+
+static void put16(GByteArray *b, guint16 v) { guint8 x[2] = {v & 255, v >> 8}; g_byte_array_append(b, x, 2); }
+static void put32(GByteArray *b, guint32 v)
+{
+    guint8 x[4] = {v & 255, v >> 8 & 255, v >> 16 & 255, v >> 24};
+    g_byte_array_append(b, x, 4);
+}
+
+static void add_files(const char *root, const char *rel, GPtrArray *out)
+{
+    char *path = rel ? g_build_filename(root, rel, NULL) : g_strdup(root);
+    GDir *d = g_dir_open(path, 0, NULL);
+    for (const char *e; d && (e = g_dir_read_name(d));) {
+        char *r = rel ? g_strconcat(rel, "/", e, NULL) : g_strdup(e);
+        char *full = g_build_filename(root, r, NULL);
+        if (g_file_test(full, G_FILE_TEST_IS_SYMLINK))
+            g_free(r);
+        else if (g_file_test(full, G_FILE_TEST_IS_DIR)) {
+            add_files(root, r, out);
+            g_free(r);
+        } else
+            g_ptr_array_add(out, r);
+        g_free(full);
+    }
+    if (d)
+        g_dir_close(d);
+    g_free(path);
+}
+
+/* every file under dir, deflated, names relative to dir with '/' */
+bool mc_zip_write_dir(const char *dir, const char *zip, char **err)
+{
+    GPtrArray *files = g_ptr_array_new_with_free_func(g_free);
+    add_files(dir, NULL, files);
+    g_ptr_array_sort_values(files, (GCompareFunc)g_strcmp0);
+    char *tmp = g_strconcat(zip, ".part", NULL);
+    FILE *f = g_fopen(tmp, "wb");
+    if (!f) {
+        *err = g_strdup_printf("Can't write %s", zip);
+        g_free(tmp);
+        g_ptr_array_unref(files);
+        return false;
+    }
+    GArray *ents = g_array_new(FALSE, TRUE, sizeof(went_t));
+    guint32 off = 0;
+    bool ok = true;
+    for (guint i = 0; i < files->len && ok; i++) {
+        const char *rel = files->pdata[i];
+        char *full = g_build_filename(dir, rel, NULL), *data = NULL;
+        gsize len = 0;
+        ok = g_file_get_contents(full, &data, &len, NULL);
+        g_free(full);
+        if (!ok)
+            break;
+        went_t w = {g_strdup(rel), (guint32)crc32(0, (const Bytef *)data, len), 0, (guint32)len, off, 8};
+        /* raw deflate (no zlib header), as zip wants */
+        z_stream zs = {0};
+        deflateInit2(&zs, 9, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY);
+        uLong cap = deflateBound(&zs, len);
+        guint8 *cbuf = g_malloc(cap);
+        zs.next_in = (Bytef *)data;
+        zs.avail_in = len;
+        zs.next_out = cbuf;
+        zs.avail_out = cap;
+        deflate(&zs, Z_FINISH);
+        w.csize = zs.total_out;
+        deflateEnd(&zs);
+        const guint8 *body = cbuf;
+        if (w.csize >= len) {            /* doesn't shrink: store it */
+            w.method = 0;
+            w.csize = len;
+            body = (const guint8 *)data;
+        }
+        GByteArray *h = g_byte_array_new();
+        put32(h, 0x04034b50); put16(h, 20); put16(h, 0x0800); put16(h, w.method);
+        put16(h, 0); put16(h, 0x21);     /* 1980-01-01 */
+        put32(h, w.crc); put32(h, w.csize); put32(h, w.usize);
+        put16(h, strlen(rel)); put16(h, 0);
+        g_byte_array_append(h, (const guint8 *)rel, strlen(rel));
+        ok = fwrite(h->data, 1, h->len, f) == h->len && fwrite(body, 1, w.csize, f) == w.csize;
+        off += h->len + w.csize;
+        g_byte_array_unref(h);
+        g_free(cbuf);
+        g_free(data);
+        g_array_append_val(ents, w);
+    }
+    GByteArray *cd = g_byte_array_new();
+    for (guint i = 0; i < ents->len; i++) {
+        went_t *w = &g_array_index(ents, went_t, i);
+        put32(cd, 0x02014b50); put16(cd, 20); put16(cd, 20); put16(cd, 0x0800); put16(cd, w->method);
+        put16(cd, 0); put16(cd, 0x21);
+        put32(cd, w->crc); put32(cd, w->csize); put32(cd, w->usize);
+        put16(cd, strlen(w->name)); put16(cd, 0); put16(cd, 0); put16(cd, 0); put16(cd, 0);
+        put32(cd, 0); put32(cd, w->offset);
+        g_byte_array_append(cd, (const guint8 *)w->name, strlen(w->name));
+        g_free(w->name);
+    }
+    put32(cd, 0x06054b50); put16(cd, 0); put16(cd, 0); put16(cd, ents->len); put16(cd, ents->len);
+    put32(cd, cd->len - 0); put32(cd, off); put16(cd, 0);
+    /* the size field above counted itself in: fix it to the directory alone */
+    guint32 cdlen = cd->len - 22;
+    cd->data[cd->len - 10] = cdlen & 255; cd->data[cd->len - 9] = cdlen >> 8 & 255;
+    cd->data[cd->len - 8] = cdlen >> 16 & 255; cd->data[cd->len - 7] = cdlen >> 24;
+    ok = ok && fwrite(cd->data, 1, cd->len, f) == cd->len;
+    ok = fclose(f) == 0 && ok;
+    g_byte_array_unref(cd);
+    g_array_unref(ents);
+    g_ptr_array_unref(files);
+    if (ok)
+        ok = g_rename(tmp, zip) == 0;
+    if (!ok) {
+        g_remove(tmp);
+        *err = g_strdup_printf("Couldn't write %s", zip);
+    }
+    g_free(tmp);
+    return ok;
+}

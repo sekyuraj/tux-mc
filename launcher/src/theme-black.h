@@ -166,6 +166,21 @@ static const char TUX_STYLE_CSS[] =
     "popover > contents { background: #0a0a0a; color: #ffffff; border: 1px solid #1a1a1a; border-radius: 12px; }\n"
     "popover > arrow { background: #0a0a0a; border: 1px solid #1a1a1a; }\n"
     "popover modelbutton:hover, popover row:hover { background: #1a1a1a; }\n"
+    "\n"
+    "/* Hats and Packs editors */\n"
+    "button.mcl-tool.active { background: #ffffff; color: #000000; border-color: #ffffff; }\n"
+    "button.mcl-swatch { padding: 2px; min-width: 0; min-height: 0; border-radius: 6px; border: 1px solid #4a4a4a; }\n"
+    "button.mcl-swatch:hover { border-color: #ffffff; }\n"
+    ".mcl-canvas { background: alpha(#000000, 0.55); border: 1px solid #1a1a1a; border-radius: 12px; }\n"
+    "button.mcl-tex { padding: 4px; border-radius: 8px; background: alpha(#000000, 0.5); border: 1px solid transparent; }\n"
+    "button.mcl-tex:hover { border-color: #4a4a4a; }\n"
+    "button.mcl-tex.active { border-color: #ffffff; }\n"
+    "button.mcl-tex.changed { background: alpha(#ffffff, 0.18); }\n"
+    "button.mcl-chip { padding: 4px 12px; border-radius: 999px; background: alpha(#000000, 0.5); border: 1px solid #1a1a1a; }\n"
+    "button.mcl-chip:checked { background: #ffffff; color: #000000; border-color: #ffffff; }\n"
+    ".mcl-small { font-size: 0.82em; }\n"
+    ".mcl-step { min-width: 26px; min-height: 26px; border-radius: 999px; background: #ffffff; color: #000000; font-weight: bold; padding: 0 8px; }\n"
+    "button.mcl-colour-btn { padding: 3px; }\n"
     ;
 
 static const char PRISM_THEME_JSON[] =
@@ -395,6 +410,21 @@ static const char TUX_STYLE_TEMPLATE[] =
     "popover > contents { background: ${bg_alt}; color: ${fg}; border: 1px solid ${surface}; border-radius: 12px; }\n"
     "popover > arrow { background: ${bg_alt}; border: 1px solid ${surface}; }\n"
     "popover modelbutton:hover, popover row:hover { background: ${surface}; }\n"
+    "\n"
+    "/* Hats and Packs editors */\n"
+    "button.mcl-tool.active { background: ${accent}; color: ${bg}; border-color: ${accent}; }\n"
+    "button.mcl-swatch { padding: 2px; min-width: 0; min-height: 0; border-radius: 6px; border: 1px solid ${muted}; }\n"
+    "button.mcl-swatch:hover { border-color: ${fg}; }\n"
+    ".mcl-canvas { background: alpha(${bg}, 0.55); border: 1px solid ${surface}; border-radius: 12px; }\n"
+    "button.mcl-tex { padding: 4px; border-radius: 8px; background: alpha(${bg}, 0.5); border: 1px solid transparent; }\n"
+    "button.mcl-tex:hover { border-color: ${muted}; }\n"
+    "button.mcl-tex.active { border-color: ${accent}; }\n"
+    "button.mcl-tex.changed { background: alpha(${accent}, 0.18); }\n"
+    "button.mcl-chip { padding: 4px 12px; border-radius: 999px; background: alpha(${bg}, 0.5); border: 1px solid ${surface}; }\n"
+    "button.mcl-chip:checked { background: ${accent}; color: ${bg}; border-color: ${accent}; }\n"
+    ".mcl-small { font-size: 0.82em; }\n"
+    ".mcl-step { min-width: 26px; min-height: 26px; border-radius: 999px; background: ${accent}; color: ${bg}; font-weight: bold; padding: 0 8px; }\n"
+    "button.mcl-colour-btn { padding: 3px; }\n"
     ;
 
 static const char PRISM_THEME_JSON_TEMPLATE[] =

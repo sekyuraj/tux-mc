@@ -195,11 +195,10 @@ static void on_flip(GtkButton *b, gpointer data)
     redraw(e);
 }
 
-static void on_bg(GObject *o, GParamSpec *ps, gpointer data)
+static void on_bg(GtkWidget *o, gpointer data)
 {
-    (void)ps;
     ed_t *e = data;
-    e->bg = *gtk_color_dialog_button_get_rgba(GTK_COLOR_DIALOG_BUTTON(o));
+    mc_colour_get(o, &e->bg);
     e->bg.alpha = 1;
     redraw(e);
 }
@@ -437,11 +436,9 @@ void mc_cape_editor(app_t *a, const char *path, const char *edit_id, void (*done
     GtkWidget *bl = mc_label("Empty space", "dim");
     gtk_widget_set_hexpand(bl, TRUE);
     gtk_label_set_xalign(GTK_LABEL(bl), 0);
-    GtkColorDialog *cd = gtk_color_dialog_new();
-    gtk_color_dialog_set_with_alpha(cd, FALSE);
-    e->bg_btn = gtk_color_dialog_button_new(cd);
-    gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(e->bg_btn), &e->bg);
-    g_signal_connect(e->bg_btn, "notify::rgba", G_CALLBACK(on_bg), e);
+    e->bg_btn = mc_colour_button_new(false);
+    mc_colour_set(e->bg_btn, &e->bg);
+    mc_colour_on_change(e->bg_btn, on_bg, e);
     gtk_box_append(GTK_BOX(bgr), bl);
     gtk_box_append(GTK_BOX(bgr), e->bg_btn);
     gtk_box_append(GTK_BOX(side), bgr);
@@ -473,7 +470,7 @@ void mc_cape_editor(app_t *a, const char *path, const char *edit_id, void (*done
         gtk_range_set_value(GTK_RANGE(e->tall), g_key_file_get_double(k, "cape", "tall", NULL));
         char *bg = g_key_file_get_string(k, "cape", "bg", NULL);
         if (bg && gdk_rgba_parse(&e->bg, bg))
-            gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(e->bg_btn), &e->bg);
+            mc_colour_set(e->bg_btn, &e->bg);
         g_free(bg);
         set_fit(e, (fit_t)CLAMP(g_key_file_get_integer(k, "cape", "fit", NULL), 0, 2));
         g_key_file_unref(k);

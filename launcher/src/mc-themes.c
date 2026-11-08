@@ -11,6 +11,7 @@
 #include "theme-black.h"
 
 #include <glib/gstdio.h>
+#include <math.h>
 #include <string.h>
 
 #define NKEYS 13
@@ -44,9 +45,13 @@ static const struct { const char *name; const char *c[NKEYS]; } BUILTIN[] = {
 static struct {
     app_t *a;
     GPtrArray *presets;                  /* preset_t */
-    GtkWidget *flow, *name, *btn[NKEYS], *apply, *del, *msg;
+    GtkWidget *flow, *name, *btn[NKEYS], *apply, *del, *msg, *simple[3], *undo;
     preset_t cur;                        /* what the editor shows */
-    bool loading;
+    preset_t prev;                       /* what was in use before the last click, for Undo */
+    char prev_name[64];
+    preset_t applied;                    /* what's in use now */
+    char applied_name[64];
+    bool loading, have_prev;
 } T;
 
 /* ---------------------------------------------------------------- files -- */
@@ -114,7 +119,7 @@ static GPtrArray *load_all(void)
     }
     /* yours, then the desktop's */
     char *dirs[2] = {presets_dir(), g_build_filename(g_get_user_config_dir(), "themes", NULL)};
-    for (int d = 0; d < 2; d++) {
+    for (int d = 0; d < (g_getenv("TUX_MC_SHOTS") ? 0 : 2); d++) {     /* screenshots: built-in ones only */
         GDir *dir = g_dir_open(dirs[d], 0, NULL);
         GPtrArray *names = g_ptr_array_new_with_free_func(g_free);
         for (const char *e; dir && (e = g_dir_read_name(dir));)
@@ -204,7 +209,7 @@ static void editor_show(const preset_t *p)
     for (int k = 0; k < NKEYS; k++) {
         GdkRGBA c;
         gdk_rgba_parse(&c, p->col[k]);
-        gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(T.btn[k]), &c);
+        mc_colour_set(T.btn[k], &c);
     }
     gtk_widget_set_visible(T.del, p->own);
     g_object_set_data_full(G_OBJECT(T.del), "file", g_strdup(p->file), g_free);
@@ -212,42 +217,379 @@ static void editor_show(const preset_t *p)
     preview();
 }
 
-static void on_color(GObject *b, GParamSpec *ps, gpointer data)
+static void on_color(GtkWidget *b, gpointer data)
 {
-    (void)ps;
     if (T.loading)
         return;
     int k = GPOINTER_TO_INT(data);
-    const GdkRGBA *c = gtk_color_dialog_button_get_rgba(GTK_COLOR_DIALOG_BUTTON(b));
+    GdkRGBA cc;
+    mc_colour_get(b, &cc);
+    const GdkRGBA *c = &cc;
     g_snprintf(T.cur.col[k], 8, "#%02x%02x%02x", (int)(c->red * 255 + 0.5), (int)(c->green * 255 + 0.5),
                (int)(c->blue * 255 + 0.5));
     preview();
 }
 
+static void set_col(cairo_t *cr, const preset_t *p, int k)
+{
+    GdkRGBA c;
+    gdk_rgba_parse(&c, p->col[k]);
+    gdk_cairo_set_source_rgba(cr, &c);
+}
+
+static void rrect(cairo_t *cr, double x, double y, double w, double h, double r)
+{
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, x + w - r, y + r, r, -G_PI / 2, 0);
+    cairo_arc(cr, x + w - r, y + h - r, r, 0, G_PI / 2);
+    cairo_arc(cr, x + r, y + h - r, r, G_PI / 2, G_PI);
+    cairo_arc(cr, x + r, y + r, r, G_PI, 1.5 * G_PI);
+    cairo_close_path(cr);
+}
+
+/* a tiny launcher in the preset's colours: sidebar, title, text, a card and a button */
 static void draw_swatch(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
 {
     (void)da;
     const preset_t *p = data;
-    static const int show[] = {0, 2, 7, 9};          /* bg, raised, text, accent */
+    rrect(cr, 0, 0, w, h, 8);
+    cairo_clip(cr);
+    set_col(cr, p, 0);
+    cairo_paint(cr);
+    double sw = w * 0.28;
+    set_col(cr, p, 1);
+    cairo_rectangle(cr, 0, 0, sw, h);
+    cairo_fill(cr);
     for (int i = 0; i < 4; i++) {
-        GdkRGBA c;
-        gdk_rgba_parse(&c, p->col[show[i]]);
-        gdk_cairo_set_source_rgba(cr, &c);
-        cairo_rectangle(cr, w * i / 4.0, 0, w / 4.0 + 1, h);
+        set_col(cr, p, i == 1 ? 7 : 5);
+        cairo_rectangle(cr, sw * 0.18, h * (0.2 + i * 0.14), sw * (i == 1 ? 0.6 : 0.5), h * 0.05);
         cairo_fill(cr);
     }
+    set_col(cr, p, 9);
+    cairo_rectangle(cr, sw * 0.06, h * 0.33, 2, h * 0.09);
+    cairo_fill(cr);
+    double x = sw + w * 0.07;
+    set_col(cr, p, 8);
+    cairo_rectangle(cr, x, h * 0.14, w * 0.3, h * 0.08);
+    cairo_fill(cr);
+    set_col(cr, p, 6);
+    cairo_rectangle(cr, x, h * 0.3, w * 0.45, h * 0.045);
+    cairo_fill(cr);
+    set_col(cr, p, 2);
+    rrect(cr, x, h * 0.44, w * 0.58, h * 0.3, 4);
+    cairo_fill_preserve(cr);
+    set_col(cr, p, 4);
+    cairo_set_line_width(cr, 1);
+    cairo_stroke(cr);
+    set_col(cr, p, 7);
+    cairo_rectangle(cr, x + w * 0.04, h * 0.51, w * 0.3, h * 0.045);
+    cairo_fill(cr);
+    set_col(cr, p, 6);
+    cairo_rectangle(cr, x + w * 0.04, h * 0.6, w * 0.4, h * 0.035);
+    cairo_fill(cr);
+    set_col(cr, p, 9);
+    rrect(cr, x, h * 0.8, w * 0.22, h * 0.12, 3);
+    cairo_fill(cr);
 }
 
 static void fill(void);
+static void on_apply(GtkButton *b, gpointer data);
+static void simple_from_cur(void);
 
+static void remember_prev(void)
+{
+    T.prev = T.applied;
+    g_strlcpy(T.prev_name, T.applied_name, sizeof T.prev_name);
+    T.have_prev = true;
+    gtk_widget_set_sensitive(T.undo, TRUE);
+}
+
+static void mark_active(const char *name)
+{
+    for (GtkWidget *c = gtk_widget_get_first_child(T.flow); c; c = gtk_widget_get_next_sibling(c)) {
+        GtkWidget *b = gtk_flow_box_child_get_child(GTK_FLOW_BOX_CHILD(c));
+        const preset_t *p = g_object_get_data(G_OBJECT(b), "preset");
+        if (p && !strcmp(p->name, name))
+            gtk_widget_add_css_class(b, "active");
+        else
+            gtk_widget_remove_css_class(b, "active");
+    }
+}
+
+/* one click: in use right away, everywhere */
 static void on_pick(GtkButton *b, gpointer data)
 {
+    (void)b;
     (void)data;
-    for (GtkWidget *c = gtk_widget_get_first_child(T.flow); c; c = gtk_widget_get_next_sibling(c))
-        gtk_widget_remove_css_class(gtk_flow_box_child_get_child(GTK_FLOW_BOX_CHILD(c)), "active");
-    gtk_widget_add_css_class(GTK_WIDGET(b), "active");
-    editor_show(g_object_get_data(G_OBJECT(b), "preset"));
-    gtk_label_set_text(GTK_LABEL(T.msg), "Previewing. Apply keeps it.");
+    const preset_t *p = g_object_get_data(G_OBJECT(b), "preset");
+    remember_prev();
+    editor_show(p);
+    simple_from_cur();
+    on_apply(NULL, NULL);
+    mark_active(p->name);
+    char *m = g_strdup_printf("Using %s. Undo goes back to %s.", p->name, T.prev_name);
+    gtk_label_set_text(GTK_LABEL(T.msg), m);
+    g_free(m);
+}
+
+static void on_undo_pick(GtkButton *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    if (!T.have_prev)
+        return;
+    preset_t p = T.prev;
+    p.name = T.prev_name;
+    p.file = NULL;
+    p.own = false;
+    char back[64];
+    g_strlcpy(back, T.prev_name, sizeof back);
+    T.have_prev = false;
+    gtk_widget_set_sensitive(T.undo, FALSE);
+    editor_show(&p);
+    simple_from_cur();
+    on_apply(NULL, NULL);
+    mark_active(back);
+    char *m = g_strdup_printf("Back to %s.", back);
+    gtk_label_set_text(GTK_LABEL(T.msg), m);
+    g_free(m);
+}
+
+/* ----------------------------------------------- three colours -> all 13 -- */
+
+static void rgb_of(const char *hex, double c[3])
+{
+    GdkRGBA r;
+    gdk_rgba_parse(&r, hex);
+    c[0] = r.red;
+    c[1] = r.green;
+    c[2] = r.blue;
+}
+
+static void put_mix(char out[8], const double a[3], const double b[3], double t)
+{
+    g_snprintf(out, 8, "#%02x%02x%02x", (int)lround((a[0] + (b[0] - a[0]) * t) * 255),
+               (int)lround((a[1] + (b[1] - a[1]) * t) * 255), (int)lround((a[2] + (b[2] - a[2]) * t) * 255));
+}
+
+static double luma(const double c[3]) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+
+/* background, text and accent decide the rest: steps between bg and text */
+static void derive(preset_t *p, const double bg[3], const double fg[3], const double ac[3])
+{
+    static const double STEP[] = {0, 0.035, 0.09, 0.16, 0.26, 0.42, 0.66};   /* bg .. subtext */
+    for (int k = 0; k < 7; k++)
+        put_mix(p->col[k], bg, fg, STEP[k]);
+    put_mix(p->col[7], fg, fg, 0);
+    double far[3] = {luma(bg) < 0.5 ? 1 : 0, luma(bg) < 0.5 ? 1 : 0, luma(bg) < 0.5 ? 1 : 0};
+    put_mix(p->col[8], fg, far, 0.5);
+    put_mix(p->col[9], ac, ac, 0);
+    put_mix(p->col[10], ac, fg, 0.3);
+    double red[3] = {0.9, 0.33, 0.24}, amber[3] = {0.88, 0.69, 0.3};
+    put_mix(p->col[11], red, fg, 0.1);
+    put_mix(p->col[12], amber, fg, 0.1);
+}
+
+static void simple_rgb(int i, double c[3])
+{
+    GdkRGBA rr;
+    mc_colour_get(T.simple[i], &rr);
+    const GdkRGBA *r = &rr;
+    c[0] = r->red;
+    c[1] = r->green;
+    c[2] = r->blue;
+}
+
+static void simple_set(int i, const double c[3])
+{
+    GdkRGBA r = {c[0], c[1], c[2], 1};
+    mc_colour_set(T.simple[i], &r);
+}
+
+static void simple_from_cur(void)
+{
+    T.loading = true;
+    double c[3];
+    static const int K[3] = {0, 7, 9};
+    for (int i = 0; i < 3; i++) {
+        rgb_of(T.cur.col[K[i]], c);
+        simple_set(i, c);
+    }
+    T.loading = false;
+}
+
+static void editor_buttons_from_cur(void)
+{
+    T.loading = true;
+    for (int k = 0; k < NKEYS; k++) {
+        GdkRGBA c;
+        gdk_rgba_parse(&c, T.cur.col[k]);
+        mc_colour_set(T.btn[k], &c);
+    }
+    T.loading = false;
+}
+
+static void on_simple(GtkWidget *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    if (T.loading)
+        return;
+    double bg[3], fg[3], ac[3];
+    simple_rgb(0, bg);
+    simple_rgb(1, fg);
+    simple_rgb(2, ac);
+    derive(&T.cur, bg, fg, ac);
+    editor_buttons_from_cur();
+    preview();
+    gtk_label_set_text(GTK_LABEL(T.msg), "Previewing. \"Save and use\" keeps it.");
+}
+
+static void on_swap(GtkButton *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    double bg[3], fg[3];
+    simple_rgb(0, bg);
+    simple_rgb(1, fg);
+    T.loading = true;
+    simple_set(0, fg);
+    T.loading = false;
+    simple_set(1, bg);
+}
+
+/* the picture's colours: a dark or light common one for the background, the
+ * most colourful common one for the accent */
+static void from_picture(const char *path)
+{
+    GdkTexture *t = gdk_texture_new_from_filename(path, NULL);
+    if (!t) {
+        gtk_label_set_text(GTK_LABEL(T.msg), "That picture couldn't be read.");
+        return;
+    }
+    int w = gdk_texture_get_width(t), h = gdk_texture_get_height(t);
+    guint8 *px = g_malloc((gsize)w * h * 4);
+    gdk_texture_download(t, px, w * 4);
+    g_object_unref(t);
+    enum { B = 16 };
+    static double sum[B * B * B][3];
+    static int cnt[B * B * B];
+    memset(sum, 0, sizeof sum);
+    memset(cnt, 0, sizeof cnt);
+    int step = MAX(1, (int)sqrt((double)w * h / 40000));
+    for (int y = 0; y < h; y += step)
+        for (int x = 0; x < w; x += step) {
+            const guint8 *p = px + ((gsize)y * w + x) * 4;    /* BGRA, premultiplied */
+            if (p[3] < 128)
+                continue;
+            int k = (p[2] / 16 * B + p[1] / 16) * B + p[0] / 16;
+            sum[k][0] += p[2] / 255.0;
+            sum[k][1] += p[1] / 255.0;
+            sum[k][2] += p[0] / 255.0;
+            cnt[k]++;
+        }
+    g_free(px);
+    int bgk = -1, ack = -1;
+    double best_bg = -1, best_ac = -1, total = 0;
+    for (int k = 0; k < B * B * B; k++)
+        total += cnt[k];
+    for (int k = 0; k < B * B * B; k++) {
+        if (!cnt[k])
+            continue;
+        double c[3] = {sum[k][0] / cnt[k], sum[k][1] / cnt[k], sum[k][2] / cnt[k]};
+        double mx = fmax(c[0], fmax(c[1], c[2])), mn = fmin(c[0], fmin(c[1], c[2])), l = luma(c);
+        double share = cnt[k] / total;
+        double sbg = share * (l < 0.25 ? 1.5 : l > 0.85 ? 1 : 0.2);
+        double sac = sqrt(share) * (mx - mn) * (l > 0.2 && l < 0.85 ? 1 : 0.3);
+        if (sbg > best_bg) { best_bg = sbg; bgk = k; }
+        if (sac > best_ac) { best_ac = sac; ack = k; }
+    }
+    if (bgk < 0) {
+        gtk_label_set_text(GTK_LABEL(T.msg), "No colours found in that picture.");
+        return;
+    }
+    double bg[3] = {sum[bgk][0] / cnt[bgk], sum[bgk][1] / cnt[bgk], sum[bgk][2] / cnt[bgk]};
+    double ac[3] = {sum[ack][0] / cnt[ack], sum[ack][1] / cnt[ack], sum[ack][2] / cnt[ack]};
+    bool dark = luma(bg) < 0.5;
+    /* keep backgrounds calm: pull them toward black or white */
+    double end[3] = {dark ? 0 : 1, dark ? 0 : 1, dark ? 0 : 1};
+    for (int i = 0; i < 3; i++)
+        bg[i] = bg[i] + (end[i] - bg[i]) * 0.55;
+    double fg[3] = {dark ? 0.9 : 0.12, dark ? 0.91 : 0.12, dark ? 0.92 : 0.13};
+    for (int i = 0; i < 3; i++)
+        fg[i] = fg[i] * 0.9 + ac[i] * 0.1;
+    T.loading = true;
+    simple_set(0, bg);
+    simple_set(1, fg);
+    T.loading = false;
+    simple_set(2, ac);
+    char *base = g_path_get_basename(path), *dot = strrchr(base, '.');
+    if (g_str_has_prefix(base, "wallpaper")) {          /* ~/.config/themes/<name>/wallpaper.png */
+        char *dir = g_path_get_dirname(path);
+        g_free(base);
+        base = g_path_get_basename(dir);
+        dot = NULL;
+        g_free(dir);
+    }
+    if (dot)
+        *dot = 0;
+    gtk_editable_set_text(GTK_EDITABLE(T.name), base);
+    g_free(base);
+    gtk_label_set_text(GTK_LABEL(T.msg), "Colours taken from the picture. Change any of the three, then \"Save and use\".");
+}
+
+static void on_picture_done(GObject *src, GAsyncResult *res, gpointer data)
+{
+    (void)data;
+    GFile *f = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(src), res, NULL);
+    if (!f)
+        return;
+    char *p = g_file_get_path(f);
+    from_picture(p);
+    g_free(p);
+    g_object_unref(f);
+}
+
+static void on_picture(GtkButton *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    GtkFileDialog *d = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(d, "Take colours from a picture");
+    GtkFileFilter *ff = gtk_file_filter_new();
+    gtk_file_filter_set_name(ff, "Pictures");
+    gtk_file_filter_add_mime_type(ff, "image/png");
+    gtk_file_filter_add_mime_type(ff, "image/jpeg");
+    gtk_file_filter_add_mime_type(ff, "image/webp");
+    GListStore *fl = g_list_store_new(GTK_TYPE_FILE_FILTER);
+    g_list_store_append(fl, ff);
+    gtk_file_dialog_set_filters(d, G_LIST_MODEL(fl));
+    const char *pics = g_get_user_special_dir(G_USER_DIRECTORY_PICTURES);
+    if (pics) {
+        GFile *pf = g_file_new_for_path(pics);
+        gtk_file_dialog_set_initial_folder(d, pf);
+        g_object_unref(pf);
+    }
+    gtk_file_dialog_open(d, T.a->win, NULL, on_picture_done, NULL);
+    g_object_unref(fl);
+    g_object_unref(ff);
+    g_object_unref(d);
+}
+
+static void on_save(GtkButton *b, gpointer data);
+
+static void on_save_use(GtkButton *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    const char *n = gtk_editable_get_text(GTK_EDITABLE(T.name));
+    if (!*n || !g_ascii_strcasecmp(n, "Black") || !g_ascii_strcasecmp(n, "Paper"))
+        gtk_editable_set_text(GTK_EDITABLE(T.name), "My theme");
+    remember_prev();
+    on_save(NULL, NULL);
+    on_apply(NULL, NULL);
+    mark_active(gtk_editable_get_text(GTK_EDITABLE(T.name)));
+    gtk_label_set_text(GTK_LABEL(T.msg), "Saved with your presets and in use.");
 }
 
 static void write_prism(const char *name, char **note)
@@ -297,6 +639,10 @@ static void on_apply(GtkButton *b, gpointer data)
                               ok ? (note ? note : "") : path);
     gtk_label_set_text(GTK_LABEL(T.msg), m);
     mc_cfg_set_str("theme_preset", gtk_editable_get_text(GTK_EDITABLE(T.name)));
+    if (ok) {
+        T.applied = T.cur;
+        g_strlcpy(T.applied_name, gtk_editable_get_text(GTK_EDITABLE(T.name)), sizeof T.applied_name);
+    }
     g_free(m);
     g_free(note);
     g_free(css);
@@ -372,7 +718,7 @@ static void fill(void)
         gtk_widget_add_css_class(b, "mcl-preset");
         GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
         GtkWidget *sw = gtk_drawing_area_new();
-        gtk_widget_set_size_request(sw, 120, 26);
+        gtk_widget_set_size_request(sw, 150, 92);
         gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(sw), draw_swatch, p, NULL);
         gtk_box_append(GTK_BOX(box), sw);
         GtkWidget *l = mc_label(p->name, NULL);
@@ -399,70 +745,108 @@ static void on_destroy(GtkWidget *w, gpointer data)
 GtkWidget *mc_themes_card(app_t *a)
 {
     T.a = a;
-    GtkWidget *card = mc_card("Theme presets",
-                              "Pick one to see it right away, change any colour, then Apply. Save keeps it as "
-                              "your own preset.");
+    GtkWidget *card = mc_card("Themes", "Click one and it's used straight away, here, in Prism and in the "
+                                        "game's right-shift menu.");
     g_signal_connect(card, "destroy", G_CALLBACK(on_destroy), NULL);
     T.flow = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(T.flow), GTK_SELECTION_NONE);
-    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(T.flow), 8);
+    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(T.flow), 6);
     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(T.flow), 8);
     gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(T.flow), 8);
     gtk_box_append(GTK_BOX(card), T.flow);
+    GtkWidget *ur = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    T.undo = gtk_button_new_with_label("Undo");
+    gtk_widget_set_sensitive(T.undo, FALSE);
+    g_signal_connect(T.undo, "clicked", G_CALLBACK(on_undo_pick), NULL);
+    gtk_box_append(GTK_BOX(ur), T.undo);
+    T.msg = mc_label("", "dim");
+    gtk_label_set_xalign(GTK_LABEL(T.msg), 0);
+    gtk_label_set_wrap(GTK_LABEL(T.msg), TRUE);
+    gtk_box_append(GTK_BOX(ur), T.msg);
+    gtk_box_append(GTK_BOX(card), ur);
+
+    /* make your own from three colours */
+    gtk_box_append(GTK_BOX(card), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+    gtk_box_append(GTK_BOX(card), mc_label("Make your own", "mcl-h2"));
+    GtkWidget *hint = mc_label("Pick three colours, or take them from a picture (your wallpaper works well). "
+                               "Everything else is worked out from these.", "dim");
+    gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+    gtk_box_append(GTK_BOX(card), hint);
+    GtkWidget *sr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    static const char *const SL[3] = {"Background", "Text", "Accent"};
+    for (int i = 0; i < 3; i++) {
+        GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+        gtk_box_append(GTK_BOX(col), mc_label(SL[i], "dim"));
+        T.simple[i] = mc_colour_button_new(false);
+        gtk_widget_set_size_request(T.simple[i], 110, -1);
+        mc_colour_on_change(T.simple[i], on_simple, NULL);
+        gtk_box_append(GTK_BOX(col), T.simple[i]);
+        gtk_box_append(GTK_BOX(sr), col);
+    }
+    GtkWidget *swap = gtk_button_new_with_label("Light / dark");
+    gtk_widget_set_tooltip_text(swap, "swap background and text");
+    gtk_widget_set_valign(swap, GTK_ALIGN_END);
+    g_signal_connect(swap, "clicked", G_CALLBACK(on_swap), NULL);
+    gtk_box_append(GTK_BOX(sr), swap);
+    GtkWidget *pic = gtk_button_new_with_label("From a picture…");
+    gtk_widget_set_valign(pic, GTK_ALIGN_END);
+    g_signal_connect(pic, "clicked", G_CALLBACK(on_picture), NULL);
+    gtk_box_append(GTK_BOX(sr), pic);
+    gtk_box_append(GTK_BOX(card), sr);
 
     GtkWidget *nr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_widget_set_margin_top(nr, 10);
     gtk_box_append(GTK_BOX(nr), mc_label("Name", NULL));
     T.name = gtk_entry_new();
     gtk_widget_set_hexpand(T.name, TRUE);
     gtk_box_append(GTK_BOX(nr), T.name);
+    GtkWidget *su = gtk_button_new_with_label("Save and use");
+    gtk_widget_add_css_class(su, "suggested-action");
+    g_signal_connect(su, "clicked", G_CALLBACK(on_save_use), NULL);
+    gtk_box_append(GTK_BOX(nr), su);
+    T.del = gtk_button_new_with_label("Delete preset");
+    gtk_widget_add_css_class(T.del, "mcl-danger");
+    g_signal_connect(T.del, "clicked", G_CALLBACK(on_delete), NULL);
+    gtk_box_append(GTK_BOX(nr), T.del);
     gtk_box_append(GTK_BOX(card), nr);
 
+    /* every colour, for people who want that */
+    GtkWidget *exp = gtk_expander_new("Fine-tune every colour");
+    gtk_widget_set_margin_top(exp, 6);
+    GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_set_margin_top(inner, 8);
     GtkWidget *grid = gtk_grid_new();
     gtk_grid_set_column_spacing(GTK_GRID(grid), 14);
     gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
-    GtkColorDialog *cd = gtk_color_dialog_new();
-    gtk_color_dialog_set_with_alpha(cd, FALSE);
     for (int k = 0; k < NKEYS; k++) {
         GtkWidget *l = mc_label(KEYS[k].label, "dim");
         gtk_label_set_xalign(GTK_LABEL(l), 0);
         gtk_label_set_width_chars(GTK_LABEL(l), 14);
         if (k % 3)
             gtk_widget_set_margin_start(l, 28);
-        T.btn[k] = gtk_color_dialog_button_new(g_object_ref(cd));
-        g_signal_connect(T.btn[k], "notify::rgba", G_CALLBACK(on_color), GINT_TO_POINTER(k));
+        T.btn[k] = mc_colour_button_new(false);
+        mc_colour_on_change(T.btn[k], on_color, GINT_TO_POINTER(k));
         int col = (k % 3) * 2, row = k / 3;
         gtk_grid_attach(GTK_GRID(grid), l, col, row, 1, 1);
         gtk_grid_attach(GTK_GRID(grid), T.btn[k], col + 1, row, 1, 1);
     }
-    g_object_unref(cd);
-    gtk_box_append(GTK_BOX(card), grid);
-
+    gtk_box_append(GTK_BOX(inner), grid);
     GtkWidget *br = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    gtk_widget_set_margin_top(br, 8);
-    T.apply = gtk_button_new_with_label("Apply");
+    T.apply = gtk_button_new_with_label("Use these");
     g_signal_connect(T.apply, "clicked", G_CALLBACK(on_apply), NULL);
-    GtkWidget *save = gtk_button_new_with_label("Save as preset");
-    g_signal_connect(save, "clicked", G_CALLBACK(on_save), NULL);
     GtkWidget *rev = gtk_button_new_with_label("Undo preview");
     g_signal_connect(rev, "clicked", G_CALLBACK(on_revert), NULL);
-    T.del = gtk_button_new_with_label("Delete preset");
-    gtk_widget_add_css_class(T.del, "mcl-danger");
-    g_signal_connect(T.del, "clicked", G_CALLBACK(on_delete), NULL);
     gtk_box_append(GTK_BOX(br), T.apply);
-    gtk_box_append(GTK_BOX(br), save);
     gtk_box_append(GTK_BOX(br), rev);
-    gtk_box_append(GTK_BOX(br), T.del);
-    gtk_box_append(GTK_BOX(card), br);
-    T.msg = mc_label("", "dim");
-    gtk_label_set_xalign(GTK_LABEL(T.msg), 0);
-    gtk_box_append(GTK_BOX(card), T.msg);
+    gtk_box_append(GTK_BOX(inner), br);
+    gtk_expander_set_child(GTK_EXPANDER(exp), inner);
+    gtk_box_append(GTK_BOX(card), exp);
 
     fill();
     const char *test = g_getenv("TUX_MC_PRESET");          /* screenshots: preview this one */
     for (guint i = 0; test && i < T.presets->len; i++)
         if (!strcmp(((preset_t *)T.presets->pdata[i])->name, test)) {
             editor_show(T.presets->pdata[i]);
+            simple_from_cur();
             return card;
         }
     /* the editor starts on the applied preset, or Black; nothing is previewed yet */
@@ -479,10 +863,15 @@ GtkWidget *mc_themes_card(app_t *a)
     for (int k = 0; k < NKEYS; k++) {
         GdkRGBA c;
         gdk_rgba_parse(&c, start->col[k]);
-        gtk_color_dialog_button_set_rgba(GTK_COLOR_DIALOG_BUTTON(T.btn[k]), &c);
+        mc_colour_set(T.btn[k], &c);
     }
     gtk_widget_set_visible(T.del, start->own);
     g_object_set_data_full(G_OBJECT(T.del), "file", g_strdup(start->file), g_free);
     T.loading = false;
+    T.applied = T.cur;
+    g_strlcpy(T.applied_name, start->name, sizeof T.applied_name);
+    simple_from_cur();
+    if (g_getenv("TUX_MC_THEME_PICTURE"))                  /* screenshots */
+        from_picture(g_getenv("TUX_MC_THEME_PICTURE"));
     return card;
 }

@@ -23,6 +23,8 @@ typedef struct {
     double show_back;                    /* > 0: turned round to show the cape */
     bool idle_turn;                      /* slow showcase turn when left alone */
     bool still;                          /* no breathing / swaying */
+    const unsigned int *hat;             /* head model, ARGB cells (see mc-hat.c), may be NULL */
+    int hat_n;
 } mc3d_t;
 
 void mc3d_init(mc3d_t *v);

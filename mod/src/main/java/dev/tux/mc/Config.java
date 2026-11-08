@@ -34,9 +34,17 @@ public final class Config {
     public static boolean zoomToggle = false;       /* press once instead of holding */
     public static String cape = "tux";              /* a Capes id, "official" or "none" */
     public static String capeImage = "";            /* png for the "image" cape */
+    public static String hat = "";                  /* worn hat (config/tuxmc/hat.tuxhat), "" = none; the launcher sets it */
+    public static boolean hatHideHelmet = true;     /* no hat while a helmet or a head is worn */
+    /* title screen: a picture instead of the panorama (the launcher's Settings, Title screen) */
+    public static String menuBg = "";
+    public static int menuBlur = 0;                 /* pixels at 1080p */
+    public static float menuDim = 0.25f;
+    public static boolean menuParallax = true;
     /* sharing: capes + emotes for other tux-mc players, over public Nostr relays */
     public static boolean sync = true;
     public static boolean syncPicture = true;       /* send your Picture cape, and show other people's */
+    public static boolean syncHats = true;          /* show other people's hats */
     public static String syncRelays = "wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net";
     /* combat */
     public static boolean hitFix = true;            /* no half-second click block after a miss */

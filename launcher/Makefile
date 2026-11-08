@@ -9,6 +9,7 @@ VERSION := $(shell cat ../VERSION 2>/dev/null || echo 0.0.0)
 CFLAGS  += -DTUX_MC_VERSION='"$(VERSION)"'
 SRC     := src/mc.c src/mc-net.c src/mc-pages.c src/mc-configs.c src/mc3d.c src/mc-sys.c src/mc-setup.c \
            src/mc-instances.c src/mc-update.c src/mc-themes.c src/mc-account.c src/mc-capeedit.c src/mc-import.c src/mc-zip.c \
+           src/mc-hat.c src/mc-hats.c src/mc-menubg.c src/mc-packs.c src/mc-colour.c \
            $(NATIVE)/capes.c
 
 # MSYS2 (UCRT64) on Windows: a GUI .exe, no console window

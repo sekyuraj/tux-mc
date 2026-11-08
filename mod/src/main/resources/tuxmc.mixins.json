@@ -21,7 +21,8 @@
     "TicketLevelMixin",
     "TicketViewMixin",
     "ScrollZoomMixin",
-    "FirstPersonEmoteMixin"
+    "FirstPersonEmoteMixin",
+    "PanoramaMixin"
   ],
   "injectors": {
     "defaultRequire": 1

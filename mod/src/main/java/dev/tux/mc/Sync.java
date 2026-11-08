@@ -95,6 +95,9 @@ public final class Sync {
     private static volatile String server;        /* hashed address of the server we're on, null = none */
     private static String capeSent = "";
     private static volatile String capeMsg;           /* our last signed cape event */
+    private static volatile String hatMsg;            /* and hat event */
+    private static String hatSent = "";
+    private static long hatDue;
     private static final long[] emoteTimes = new long[6];
     private static long capeDue, askDue;
     private static int askedCount;
@@ -119,7 +122,8 @@ public final class Sync {
         if (server == null)
             return "starts when you join a server";
         long up = relays.stream().filter(r -> r.open).count();
-        return up + "/" + relays.size() + " relays, " + capes.size() + (capes.size() == 1 ? " player" : " players");
+        return up + "/" + relays.size() + " relays, " + capes.size() + (capes.size() == 1 ? " player" : " players")
+                + (Hats.remoteCount() > 0 ? ", " + Hats.remoteCount() + (Hats.remoteCount() == 1 ? " hat" : " hats") : "");
     }
 
     /* ----------------------------------------------------------------- tick */
@@ -139,6 +143,8 @@ public final class Sync {
             server = now;
             capeSent = "";
             capeDue = 0;
+            hatSent = null;
+            hatDue = 0;
             connect();
         }
         long t = System.currentTimeMillis();
@@ -152,6 +158,14 @@ public final class Sync {
             capeSent = c;
             capeDue = t + 3000;
             publishCape();
+        }
+
+        /* hat: the same, as its own event so a picture cape and a hat each get the full size */
+        String hk = Config.hat.isBlank() ? "" : Config.hat + "@" + Hats.stamp();
+        if (!hk.equals(hatSent) && t >= hatDue) {
+            hatSent = hk;
+            hatDue = t + 3000;
+            publishHat();
         }
 
         /* ask for the capes of players we see */
@@ -194,6 +208,7 @@ public final class Sync {
 
     private static void leave() {
         capeMsg = null;
+        hatMsg = null;
         for (Relay r : relays)
             r.close();
         relays.clear();
@@ -319,6 +334,17 @@ public final class Sync {
         });
     }
 
+    /** an empty "h" takes it off for everyone */
+    private static void publishHat() {
+        work.execute(() -> {
+            byte[] b = Hats.ownBytes();
+            JsonObject d = new JsonObject();
+            d.addProperty("h", b == null || b.length > Hats.SHARE_MAX ? "" : Base64.getEncoder().encodeToString(b));
+            send(KIND_CAPE, List.of(new String[] {"d", "tuxmc-hat"}, new String[] {"t", TAG},
+                    new String[] {"u", uuid().toString()}), d.toString());
+        });
+    }
+
     /** called by Emotes.play / stop; null = stopped */
     public static void sendEmote(Emotes.Emote e) {
         if (!Config.sync || server == null || keys == null)
@@ -364,7 +390,9 @@ public final class Sync {
             o.addProperty("ks", Base64.getEncoder().encodeToString(kd.keySignature()));
             o.addProperty("sg", Base64.getEncoder().encodeToString(sig));
             String msg = "[\"EVENT\"," + Nostr.event(secret, at, kind, tags, o.toString()) + "]";
-            if (kind == KIND_CAPE)
+            if (kind == KIND_CAPE && tags.get(0)[1].equals("tuxmc-hat"))
+                hatMsg = msg;
+            else if (kind == KIND_CAPE)
                 capeMsg = msg;
             Minecraft.getInstance().execute(() -> {
                 for (Relay r : relays)
@@ -490,7 +518,13 @@ public final class Sync {
                 return;
             }
             JsonObject dj = JsonParser.parseString(d).getAsJsonObject();
-            if (kind == KIND_CAPE)
+            if (kind == KIND_CAPE && dj.has("h")) {
+                String h = dj.get("h").getAsString();
+                byte[] b = h.isEmpty() || h.length() > 61_000 ? null : Base64.getDecoder().decode(h);
+                if (SELF)
+                    TuxMc.LOG.info("tuxmc: sync: {} hat {}", u, b == null ? "off" : b.length + " bytes");
+                Hats.putRemote(u, b, at);
+            } else if (kind == KIND_CAPE)
                 gotCape(u, dj, at);
             else
                 gotEmote(u, dj);
@@ -613,6 +647,8 @@ public final class Sync {
                         send(capeReq);
                     if (capeMsg != null)           /* only this relay is new: give it the same event */
                         send(capeMsg);
+                    if (hatMsg != null)
+                        send(hatMsg);
                     if (SELF)
                         TuxMc.LOG.info("tuxmc: sync: {} open, cape request {}", url, capeReq == null ? "none" : "sent");
                 });

@@ -42,6 +42,11 @@ public class TuxMc implements ClientModInitializer {
 
         HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("tuxmc", "hud"), Hud::extract);
         ClientTickEvents.END_CLIENT_TICK.register(TuxMc::tick);
+        net.fabricmc.fabric.api.client.rendering.v1.LivingEntityRenderLayerRegistrationCallback.EVENT.register(
+                (type, renderer, helper, ctx) -> {
+                    if (renderer instanceof net.minecraft.client.renderer.entity.player.AvatarRenderer<?> r)
+                        helper.register(new HatLayer(r));
+                });
 
         ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
             if (screen instanceof TitleScreen || screen instanceof PauseScreen)

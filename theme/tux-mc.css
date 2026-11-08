@@ -161,3 +161,18 @@ popover.background, popover { background: transparent; box-shadow: none; }
 popover > contents { background: ${bg_alt}; color: ${fg}; border: 1px solid ${surface}; border-radius: 12px; }
 popover > arrow { background: ${bg_alt}; border: 1px solid ${surface}; }
 popover modelbutton:hover, popover row:hover { background: ${surface}; }
+
+/* Hats and Packs editors */
+button.mcl-tool.active { background: ${accent}; color: ${bg}; border-color: ${accent}; }
+button.mcl-swatch { padding: 2px; min-width: 0; min-height: 0; border-radius: 6px; border: 1px solid ${muted}; }
+button.mcl-swatch:hover { border-color: ${fg}; }
+.mcl-canvas { background: alpha(${bg}, 0.55); border: 1px solid ${surface}; border-radius: 12px; }
+button.mcl-tex { padding: 4px; border-radius: 8px; background: alpha(${bg}, 0.5); border: 1px solid transparent; }
+button.mcl-tex:hover { border-color: ${muted}; }
+button.mcl-tex.active { border-color: ${accent}; }
+button.mcl-tex.changed { background: alpha(${accent}, 0.18); }
+button.mcl-chip { padding: 4px 12px; border-radius: 999px; background: alpha(${bg}, 0.5); border: 1px solid ${surface}; }
+button.mcl-chip:checked { background: ${accent}; color: ${bg}; border-color: ${accent}; }
+.mcl-small { font-size: 0.82em; }
+.mcl-step { min-width: 26px; min-height: 26px; border-radius: 999px; background: ${accent}; color: ${bg}; font-weight: bold; padding: 0 8px; }
+button.mcl-colour-btn { padding: 3px; }

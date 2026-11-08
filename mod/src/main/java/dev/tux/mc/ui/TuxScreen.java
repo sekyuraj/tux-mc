@@ -23,6 +23,9 @@ import net.minecraft.network.chat.Component;
 
 /** the tux menu: double-tap left shift in game, or the Tux button on the title / pause screen */
 public class TuxScreen extends Screen {
+    /* the title screen picture to switch back to (the launcher keeps it here) */
+    private static String menuBgOff = net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir()
+            .resolve("tuxmc").resolve("menu-bg.png").toString();
     public enum Tab {
         NETWORK("Network"), SERVER("Server"), WAYPOINTS("Waypoints"), SESSION("Session"), EMOTES("Emotes"),
         COSMETICS("Capes"), SETTINGS("Settings");
@@ -663,6 +666,19 @@ public class TuxScreen extends Screen {
         toggle(g, x, y0, w, mx, my, al, dt, "Share pictures",
                 "your Picture cape and other people's (more internet use)", Config.syncPicture,
                 () -> Config.syncPicture = !Config.syncPicture);
+        toggle(g, x, y0, w, mx, my, al, dt, "Other people's hats", "show the hats other tux-mc players made",
+                Config.syncHats, () -> Config.syncHats = !Config.syncHats);
+        toggle(g, x, y0, w, mx, my, al, dt, "Hat off under a helmet", "your hat and theirs hide while a helmet is on",
+                Config.hatHideHelmet, () -> Config.hatHideHelmet = !Config.hatHideHelmet);
+        toggle(g, x, y0, w, mx, my, al, dt, "Title screen picture", "the one set in the launcher; off = the panorama",
+                !Config.menuBg.isBlank(), () -> {
+                    if (Config.menuBg.isBlank())
+                        Config.menuBg = menuBgOff;
+                    else {
+                        menuBgOff = Config.menuBg;
+                        Config.menuBg = "";
+                    }
+                });
         section(g, x, y0, "Combat", al);
         toggle(g, x, y0, w, mx, my, al, dt, "Hit delay fix", "clicks right after a miss still hit (1.8 PvP, Hypixel)",
                 Config.hitFix, () -> Config.hitFix = !Config.hitFix);

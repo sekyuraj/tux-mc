@@ -11,6 +11,13 @@ enum { PAL_FG, PAL_DIM, PAL_ACCENT, PAL_ACCENT2, PAL_BG, PAL_WARN, PAL_SURFACE, 
 
 typedef struct app app_t;
 
+/* a head model, see mc-hat.c */
+typedef struct {
+    int n;                               /* 16 or 32 cells a side */
+    guint32 *c;                          /* n^3 ARGB, 0 = empty; index (y * n + z) * n + x */
+    char name[64];
+} mc_hat_t;
+
 typedef struct {
     char *id, *alias, *url;
     cairo_surface_t *tex;
@@ -45,13 +52,14 @@ struct app {
 
     char *tux_cape;
     cairo_surface_t *tux_cape_tex;       /* the client cape, painted by libtuxmc */
+    mc_hat_t hat;                        /* the one you wear (n = 0: none) */
 
     /* looks (Settings → Launcher), see mc_apply_looks */
     int bg_blur;
     bool bg_motion, bg_dust;
 
     /* chrome */
-    GtkWidget *bg, *stack, *nav[8], *status;
+    GtkWidget *bg, *stack, *nav[12], *status;
     int npages;
 
     /* home */
@@ -195,6 +203,47 @@ void mc_update_restart(const char *argv0);   /* after the app quit: start the ne
 
 /* mc.c: rebuild the window (another instance was picked), showing page */
 void mc_reload_window(app_t *a, const char *page);
+
+/* mc-colour.c: hue ring + shade square + hex (+ opacity); the button opens it in a popover */
+GtkWidget *mc_colour_wheel_new(bool alpha, int size);
+GtkWidget *mc_colour_button_new(bool alpha);
+void mc_colour_get(GtkWidget *w, GdkRGBA *c);
+void mc_colour_set(GtkWidget *w, const GdkRGBA *c);   /* calls the change callback */
+void mc_colour_on_change(GtkWidget *w, void (*cb)(GtkWidget *w, gpointer data), gpointer data);
+
+/* mc-hat.c */
+void mc_hat_new(mc_hat_t *h, int n);
+void mc_hat_free(mc_hat_t *h);
+void mc_hat_copy(mc_hat_t *to, const mc_hat_t *from);
+int mc_hat_count(const mc_hat_t *h);
+bool mc_hat_is_head(int n, int x, int y, int z);
+GBytes *mc_hat_encode(const mc_hat_t *h);
+bool mc_hat_decode(const guint8 *data, gsize len, mc_hat_t *h);
+bool mc_hat_load(const char *path, mc_hat_t *h);
+bool mc_hat_save(const char *path, const mc_hat_t *h);
+char *mc_hats_dir(void);                  /* <data>/tux-mc/hats */
+int mc_hat_presets(void);
+const char *mc_hat_preset_name(int i);
+void mc_hat_preset(mc_hat_t *h, int i);
+bool mc_hat_import_vox(const char *path, mc_hat_t *h, char **err);
+void mc_hat_resize(mc_hat_t *h, int n);
+/* mc-hats.c: the Hats page (editor); the worn hat is in <instance>/config/tuxmc/hat.tuxhat */
+GtkWidget *mc_page_hats(app_t *a);
+void mc_hat_load_worn(app_t *a);
+
+/* mc-packs.c: the Packs page (resource pack maker) */
+GtkWidget *mc_page_packs(app_t *a);
+
+/* mc-zip.c: write a folder as a zip; open one zip for many reads by exact name */
+bool mc_zip_write_dir(const char *dir, const char *zip, char **err);
+typedef struct mc_zip mc_zip_t;
+mc_zip_t *mc_zip_open(const char *zip);
+GBytes *mc_zip_get(mc_zip_t *z, const char *name);
+void mc_zip_names(mc_zip_t *z, void (*each)(const char *name, void *data), void *data);
+void mc_zip_close(mc_zip_t *z);
+
+/* mc-menubg.c: Settings → Title screen (the game's main menu background) */
+GtkWidget *mc_menubg_card(app_t *a);
 
 /* pages */
 GtkWidget *mc_page_home(app_t *a);

@@ -34,13 +34,20 @@ typedef struct {
     int tw, th, tstride;                 /* stride in pixels */
 } face_t;
 
-#define MAXF 160
-
 typedef struct {
     double yaw, pitch, cx, cy, s;        /* s: pixels per model unit */
-    face_t f[MAXF];
-    int n;
+    face_t *f;
+    int n, cap;
 } scene_t;
+
+static face_t *new_face(scene_t *sc)
+{
+    if (sc->n == sc->cap) {
+        sc->cap = sc->cap ? sc->cap * 2 : 256;
+        sc->f = realloc(sc->f, sizeof *sc->f * sc->cap);
+    }
+    return &sc->f[sc->n++];
+}
 
 static v3 rot_part(v3 p, const box_t *b)
 {
@@ -78,7 +85,7 @@ static v3 cross(v3 a, v3 b) { return (v3){a.y * b.z - a.z * b.y, a.z * b.x - a.x
 
 static void add_face(scene_t *sc, const box_t *b, v3 tl, v3 tr, v3 bl, double fu, double fv, double fw, double fh)
 {
-    if (sc->n >= MAXF || fw <= 0 || fh <= 0 || !b->tex)
+    if (fw <= 0 || fh <= 0 || !b->tex)
         return;
     v3 a = view(sc, rot_part(tl, b)), c = view(sc, rot_part(tr, b)), d = view(sc, rot_part(bl, b));
     v3 n = cross(sub(d, a), sub(c, a));
@@ -90,7 +97,7 @@ static void add_face(scene_t *sc, const box_t *b, v3 tl, v3 tr, v3 bl, double fu
     n.x /= len; n.y /= len; n.z /= len;
     const double L[3] = {-0.42, 0.55, 0.72};
     double lam = n.x * L[0] + n.y * L[1] + n.z * L[2];
-    face_t *f = &sc->f[sc->n++];
+    face_t *f = new_face(sc);
     f->light = 0.52 + 0.48 * (lam > 0 ? lam : 0);
     f->p[0] = a;
     f->p[1] = c;
@@ -104,6 +111,50 @@ static void add_face(scene_t *sc, const box_t *b, v3 tl, v3 tr, v3 bl, double fu
     f->tw = cairo_image_surface_get_width(b->tex);
     f->th = cairo_image_surface_get_height(b->tex);
     f->tstride = cairo_image_surface_get_stride(b->tex) / 4;
+}
+
+/* one cell face of the head model: a flat colour, no edge line */
+static void add_cell_face(scene_t *sc, const box_t *b, v3 tl, v3 tr, v3 bl, const uint32_t *colour)
+{
+    int n0 = sc->n;
+    add_face(sc, b, tl, tr, bl, 0, 0, 1, 1);
+    if (sc->n == n0)
+        return;
+    face_t *f = &sc->f[sc->n - 1];
+    f->tex = colour;
+    f->fu = f->fv = 0;
+    f->fw = f->fh = 1;
+    f->tw = f->th = f->tstride = 1;
+    f->mw = f->mh = 1e6;
+}
+
+static void add_hat(scene_t *sc, const mc3d_t *v, const box_t *head)
+{
+    int n = v->hat_n;
+    double s = 16.0 / n;
+    const uint32_t *c = v->hat;
+#define CELL(x, y, z) ((x) >= 0 && (y) >= 0 && (z) >= 0 && (x) < n && (y) < n && (z) < n && c[((y) * n + (z)) * n + (x)])
+    for (int y = 0; y < n; y++)
+        for (int z = 0; z < n; z++)
+            for (int x = 0; x < n; x++) {
+                const uint32_t *k = &c[(y * n + z) * n + x];
+                if (!*k)
+                    continue;
+                double x0 = -8 + x * s, x1 = x0 + s, y0 = 22 + y * s, y1 = y0 + s, z0 = -8 + z * s, z1 = z0 + s;
+                if (!CELL(x, y, z + 1))
+                    add_cell_face(sc, head, (v3){x0, y1, z1}, (v3){x1, y1, z1}, (v3){x0, y0, z1}, k);
+                if (!CELL(x, y, z - 1))
+                    add_cell_face(sc, head, (v3){x1, y1, z0}, (v3){x0, y1, z0}, (v3){x1, y0, z0}, k);
+                if (!CELL(x - 1, y, z))
+                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x0, y1, z1}, (v3){x0, y0, z0}, k);
+                if (!CELL(x + 1, y, z))
+                    add_cell_face(sc, head, (v3){x1, y1, z1}, (v3){x1, y1, z0}, (v3){x1, y0, z1}, k);
+                if (!CELL(x, y + 1, z))
+                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x1, y1, z0}, (v3){x0, y1, z1}, k);
+                if (!CELL(x, y - 1, z))
+                    add_cell_face(sc, head, (v3){x0, y0, z1}, (v3){x1, y0, z1}, (v3){x0, y0, z0}, k);
+            }
+#undef CELL
 }
 
 static void add_box(scene_t *sc, const box_t *b)
@@ -339,12 +390,14 @@ void mc3d_draw(mc3d_t *v, cairo_t *cr, int w, int h, const double sh[3])
     sc.n = 0;
     sc.yaw = v->yaw;
     sc.pitch = v->pitch;
-    double scale = fmin(h / 47.0, w / 26.0);
+    bool hat = v->hat && (v->hat_n == 16 || v->hat_n == 32);
+    double scale = fmin(h / (hat ? 54.0 : 47.0), w / 26.0);   /* a hat reaches 6 pixels above the head */
+    double mid = hat ? 0.53 : 0.47;
 
     /* floor shadow, in output pixels */
     sc.s = scale;
     sc.cx = w / 2.0;
-    sc.cy = h * 0.47;
+    sc.cy = h * mid;
     double fx, fy;
     project(&sc, view(&sc, (v3){0, 0, 0}), &fx, &fy);
     cairo_save(cr);
@@ -364,7 +417,7 @@ void mc3d_draw(mc3d_t *v, cairo_t *cr, int w, int h, const double sh[3])
     int rw = (int)ceil(w * ss), rh = (int)ceil(h * ss);
     sc.s = scale * ss;
     sc.cx = rw / 2.0;
-    sc.cy = rh * 0.47;
+    sc.cy = rh * mid;
 
     cairo_surface_flush(v->skin);
     cairo_surface_t *k = v->skin;
@@ -376,6 +429,10 @@ void mc3d_draw(mc3d_t *v, cairo_t *cr, int w, int h, const double sh[3])
     v3 neck = {0, 24, 0};
 
     part(&sc, k, -4, 24, -4, 8, 8, 8, 0, 0, 32, 0, 0.5, v->look_y * 0.45, v->look_x * 0.7, 0, neck);
+    if (hat) {
+        box_t head = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, k, 1, v->look_y * 0.45, v->look_x * 0.7, 0, neck, 0.1};
+        add_hat(&sc, v, &head);
+    }
     part(&sc, k, -4, 12, -2, 8, 12, 4, 16, 16, legacy ? -1 : 16, 32, 0.25, 0, 0, 0, neck);
     double rwave = v->wave > 0 ? -v->wave * (2.5 + sin(t * 10) * 0.35) : 0;
     part(&sc, k, -4 - aw, 12, -2, aw, 12, 4, 40, 16, legacy ? -1 : 40, 32, 0.25, swing, 0,
