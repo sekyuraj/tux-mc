@@ -291,3 +291,215 @@ GtkWidget *mc_menubg_card(app_t *a)
     load_pic();
     return card;
 }
+
+/* ------------------------------------------- the launcher's own background -- */
+
+static struct {
+    app_t *a;
+    GtkWidget *area, *dim, *msg, *wall;
+    cairo_surface_t *pic;                /* the picture at most 960 wide, for the preview */
+    bool loaded;
+} L;
+
+static void l_load(void)
+{
+    g_clear_pointer(&L.pic, cairo_surface_destroy);
+    L.loaded = true;
+    char *p = mc_bg_path();
+    GdkTexture *t = p ? gdk_texture_new_from_filename(p, NULL) : NULL;
+    g_free(p);
+    if (!t)
+        return;
+    int tw = gdk_texture_get_width(t), th = gdk_texture_get_height(t);
+    cairo_surface_t *full = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, tw, th);
+    gdk_texture_download(t, cairo_image_surface_get_data(full), cairo_image_surface_get_stride(full));
+    cairo_surface_mark_dirty(full);
+    g_object_unref(t);
+    double k = fmin(1, 960.0 / tw);
+    L.pic = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, MAX(1, (int)(tw * k)), MAX(1, (int)(th * k)));
+    cairo_t *cr = cairo_create(L.pic);
+    cairo_scale(cr, k, k);
+    cairo_set_source_surface(cr, full, 0, 0);
+    cairo_paint(cr);
+    cairo_destroy(cr);
+    cairo_surface_destroy(full);
+}
+
+static void l_draw(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
+{
+    (void)da;
+    (void)data;
+    GdkRGBA bg;
+    mc_pal(L.a, PAL_BG, &bg);
+    gdk_cairo_set_source_rgba(cr, &bg);
+    cairo_paint(cr);
+    if (!L.loaded)
+        l_load();
+    if (L.pic) {
+        int sw = cairo_image_surface_get_width(L.pic), sh = cairo_image_surface_get_height(L.pic);
+        double c = fmax((double)w / sw, (double)h / sh);
+        cairo_save(cr);
+        cairo_translate(cr, (w - sw * c) / 2, (h - sh * c) / 2);
+        cairo_scale(cr, c, c);
+        cairo_set_source_surface(cr, L.pic, 0, 0);
+        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD);
+        cairo_paint(cr);
+        cairo_restore(cr);
+    }
+    /* the same shade the launcher puts over it: darker at the sides */
+    double d = gtk_range_get_value(GTK_RANGE(L.dim)) / 100;
+    cairo_pattern_t *g = cairo_pattern_create_linear(0, 0, w, 0);
+    cairo_pattern_add_color_stop_rgba(g, 0, bg.red, bg.green, bg.blue, d);
+    cairo_pattern_add_color_stop_rgba(g, 0.55, bg.red, bg.green, bg.blue, d * 0.5);
+    cairo_pattern_add_color_stop_rgba(g, 1, bg.red, bg.green, bg.blue, d);
+    cairo_set_source(cr, g);
+    cairo_paint(cr);
+    cairo_pattern_destroy(g);
+    if (!L.pic) {
+        GdkRGBA dc;
+        mc_pal(L.a, PAL_DIM, &dc);
+        gdk_cairo_set_source_rgba(cr, &dc);
+        cairo_set_font_size(cr, 14);
+        const char *s = "No picture: a plain background";
+        cairo_text_extents_t e;
+        cairo_text_extents(cr, s, &e);
+        cairo_move_to(cr, (w - e.width) / 2, h / 2.0);
+        cairo_show_text(cr, s);
+    }
+}
+
+static void l_changed(const char *m)
+{
+    mc_bg_reload(L.a);
+    L.loaded = false;
+    gtk_widget_queue_draw(L.area);
+    gtk_label_set_text(GTK_LABEL(L.msg), m);
+}
+
+static void l_chosen(GObject *src, GAsyncResult *res, gpointer data)
+{
+    (void)data;
+    GFile *f = gtk_file_dialog_open_finish(GTK_FILE_DIALOG(src), res, NULL);
+    if (!f)
+        return;
+    char *p = g_file_get_path(f);
+    char *dir = g_build_filename(g_get_user_config_dir(), "tux-mc", NULL);
+    char *out = g_build_filename(dir, "background.png", NULL);
+    g_mkdir_with_parents(dir, 0755);
+    GdkTexture *t = gdk_texture_new_from_filename(p, NULL);
+    if (t && gdk_texture_save_to_png(t, out)) {
+        mc_cfg_set_str("bg_image", out);
+        l_changed("Set. It's behind every page, Home too.");
+    } else {
+        gtk_label_set_text(GTK_LABEL(L.msg), "That picture couldn't be read.");
+    }
+    if (t)
+        g_object_unref(t);
+    g_free(out);
+    g_free(dir);
+    g_free(p);
+    g_object_unref(f);
+}
+
+static void l_choose(GtkButton *b, gpointer data)
+{
+    (void)b;
+    (void)data;
+    GtkFileDialog *d = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(d, "Launcher background");
+    GtkFileFilter *ff = gtk_file_filter_new();
+    gtk_file_filter_set_name(ff, "Pictures");
+    gtk_file_filter_add_mime_type(ff, "image/png");
+    gtk_file_filter_add_mime_type(ff, "image/jpeg");
+    gtk_file_filter_add_mime_type(ff, "image/webp");
+    GListStore *fl = g_list_store_new(GTK_TYPE_FILE_FILTER);
+    g_list_store_append(fl, ff);
+    gtk_file_dialog_set_filters(d, G_LIST_MODEL(fl));
+    const char *pics = g_get_user_special_dir(G_USER_DIRECTORY_PICTURES);
+    if (pics) {
+        GFile *pf = g_file_new_for_path(pics);
+        gtk_file_dialog_set_initial_folder(d, pf);
+        g_object_unref(pf);
+    }
+    gtk_file_dialog_open(d, L.a->win, NULL, l_chosen, NULL);
+    g_object_unref(fl);
+    g_object_unref(ff);
+    g_object_unref(d);
+}
+
+static void l_wallpaper(GtkButton *b, gpointer d)
+{
+    (void)b;
+    (void)d;
+    mc_cfg_set_str("bg_image", "");
+    l_changed("Back to your desktop wallpaper.");
+}
+
+static void l_none(GtkButton *b, gpointer d)
+{
+    (void)b;
+    (void)d;
+    mc_cfg_set_str("bg_image", "none");
+    l_changed("No picture.");
+}
+
+static void l_dim(GtkRange *r, gpointer d)
+{
+    (void)d;
+    mc_cfg_set_int("bg_dim", (int)gtk_range_get_value(r));
+    L.a->bg_dim = gtk_range_get_value(r) / 100;
+    gtk_widget_queue_draw(L.area);
+    if (L.a->bg)
+        gtk_widget_queue_draw(L.a->bg);
+}
+
+static void l_destroy(GtkWidget *w, gpointer d)
+{
+    (void)w;
+    (void)d;
+    L.area = NULL;
+    g_clear_pointer(&L.pic, cairo_surface_destroy);
+    L.loaded = false;
+}
+
+GtkWidget *mc_launcher_bg_card(app_t *a)
+{
+    L.a = a;
+    GtkWidget *card = mc_card("Launcher picture", "What you see behind Home and the other pages.");
+    g_signal_connect(card, "destroy", G_CALLBACK(l_destroy), NULL);
+    L.area = gtk_drawing_area_new();
+    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(L.area), 400);
+    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(L.area), 225);
+    gtk_widget_set_halign(L.area, GTK_ALIGN_START);
+    gtk_widget_add_css_class(L.area, "mcl-canvas");
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(L.area), l_draw, NULL, NULL);
+    gtk_box_append(GTK_BOX(card), L.area);
+    GtkWidget *br = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *ch = gtk_button_new_with_label("Choose a picture…");
+    g_signal_connect(ch, "clicked", G_CALLBACK(l_choose), NULL);
+    gtk_box_append(GTK_BOX(br), ch);
+    if (MC_LINUX) {                      /* the desktop theme switcher (~/.config/themes) only exists here */
+        L.wall = gtk_button_new_with_label("Desktop wallpaper");
+        g_signal_connect(L.wall, "clicked", G_CALLBACK(l_wallpaper), NULL);
+        gtk_box_append(GTK_BOX(br), L.wall);
+    }
+    GtkWidget *no = gtk_button_new_with_label("No picture");
+    g_signal_connect(no, "clicked", G_CALLBACK(l_none), NULL);
+    gtk_box_append(GTK_BOX(br), no);
+    gtk_box_append(GTK_BOX(card), br);
+    GtkWidget *dr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    GtkWidget *dl = mc_label("Darken", NULL);
+    gtk_label_set_width_chars(GTK_LABEL(dl), 8);
+    gtk_box_append(GTK_BOX(dr), dl);
+    L.dim = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 95, 1);
+    gtk_scale_set_draw_value(GTK_SCALE(L.dim), TRUE);
+    gtk_scale_set_value_pos(GTK_SCALE(L.dim), GTK_POS_RIGHT);
+    gtk_widget_set_hexpand(L.dim, TRUE);
+    gtk_range_set_value(GTK_RANGE(L.dim), mc_cfg_int("bg_dim", 88));
+    g_signal_connect(L.dim, "value-changed", G_CALLBACK(l_dim), NULL);
+    gtk_box_append(GTK_BOX(dr), L.dim);
+    gtk_box_append(GTK_BOX(card), dr);
+    L.msg = mc_label("Blur and drift are in the card below.", "dim");
+    gtk_box_append(GTK_BOX(card), L.msg);
+    return card;
+}

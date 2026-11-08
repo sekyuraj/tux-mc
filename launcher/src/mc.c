@@ -212,8 +212,8 @@ static void tux_bg_snapshot(GtkWidget *w, GtkSnapshot *s)
     }
     /* theme gradient: dark at the sides, a little accent light low in the middle */
     GdkRGBA a0 = bg, a1 = bg;
-    a0.alpha = 0.88;
-    a1.alpha = 0.45;
+    a0.alpha = b->a->bg_dim;
+    a1.alpha = b->a->bg_dim * 0.5;
     GskColorStop stops[] = {{0, a0}, {0.55, a1}, {1, a0}};
     gtk_snapshot_append_linear_gradient(s, &GRAPHENE_RECT_INIT(0, 0, W, H), &GRAPHENE_POINT_INIT(0, 0),
                                         &GRAPHENE_POINT_INIT(W, 0), stops, 3);
@@ -302,13 +302,29 @@ static char *theme_wallpaper(void)
     return res;
 }
 
+char *mc_bg_path(void)
+{
+    char *pick = g_getenv("TUX_MC_BG") ? g_strdup(g_getenv("TUX_MC_BG")) : mc_cfg_str("bg_image", "");   /* tests */
+    char *path = !*pick ? theme_wallpaper() : strcmp(pick, "none") ? g_strdup(pick) : NULL;
+    g_free(pick);
+    return path;
+}
+
 static void bg_load(TuxBg *b)
 {
-    char *path = theme_wallpaper();
+    char *path = mc_bg_path();
     g_clear_object(&b->tex);
     if (path)
         b->tex = gdk_texture_new_from_filename(path, NULL);
     g_free(path);
+}
+
+void mc_bg_reload(app_t *a)
+{
+    if (a->bg) {
+        bg_load(TUX_BG(a->bg));
+        gtk_widget_queue_draw(a->bg);
+    }
 }
 
 /* ---------------------------------------------------------------- home -- */
@@ -1335,6 +1351,35 @@ static gboolean on_key(GtkEventControllerKey *k, guint key, guint code, GdkModif
     return FALSE;
 }
 
+/* Shift + wheel (or a two-finger swipe with Shift) moves through the pages, like niri's workspaces */
+static gboolean on_page_scroll(GtkEventControllerScroll *sc, double dx, double dy, gpointer data)
+{
+    app_t *a = data;
+    static double acc;
+    static gint64 last;
+    GdkModifierType st = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(sc));
+    if (!(st & GDK_SHIFT_MASK))
+        return FALSE;
+    double d = fabs(dy) >= fabs(dx) ? dy : dx;      /* some systems turn Shift+wheel into sideways scrolling */
+    gint64 now = g_get_monotonic_time();
+    if (now - last > 400000)
+        acc = 0;
+    acc += d;
+    if (fabs(acc) < 1 || now - last < 140000)       /* touchpads send many small steps: one page per push */
+        return TRUE;
+    int n = (int)G_N_ELEMENTS(PAGES), cur = 0;
+    const char *vis = gtk_stack_get_visible_child_name(GTK_STACK(a->stack));
+    for (int i = 0; i < n; i++)
+        if (vis && !strcmp(vis, PAGES[i].id))
+            cur = i;
+    int next = CLAMP(cur + (acc > 0 ? 1 : -1), 0, n - 1);
+    acc = 0;
+    last = now;
+    if (next != cur)
+        show_page(a, next);
+    return TRUE;
+}
+
 static void on_close(GtkButton *b, gpointer d) { (void)b; gtk_window_close(((app_t *)d)->win); }
 
 static void on_destroy(GtkWidget *w, gpointer data)
@@ -1390,6 +1435,10 @@ static void build_window(app_t *a)
     GtkEventController *keys = gtk_event_controller_key_new();
     g_signal_connect(keys, "key-pressed", G_CALLBACK(on_key), a);
     gtk_widget_add_controller(GTK_WIDGET(a->win), keys);
+    GtkEventController *ps = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES);
+    gtk_event_controller_set_propagation_phase(ps, GTK_PHASE_CAPTURE);
+    g_signal_connect(ps, "scroll", G_CALLBACK(on_page_scroll), a);
+    gtk_widget_add_controller(GTK_WIDGET(a->win), ps);
 #ifdef _WIN32
     GtkGesture *tp = gtk_gesture_click_new();
     gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(tp), GDK_BUTTON_PRIMARY);
@@ -1486,6 +1535,7 @@ static void build_window(app_t *a)
 
 void mc_apply_looks(app_t *a)
 {
+    a->bg_dim = mc_cfg_int("bg_dim", 88) / 100.0;
     a->bg_blur = mc_cfg_int("bg_blur", 6);
     a->bg_motion = mc_cfg_bool("bg_motion", true);
     a->bg_dust = mc_cfg_bool("bg_dust", true);

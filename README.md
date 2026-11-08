@@ -100,7 +100,8 @@ To turn all of it off, use Settings → Sharing → Share capes and emotes. You 
 - **Settings**, in sections: Game (RAM, window), Performance (speed switches, Java arguments, environment, wrapper), Launcher, Looks, Title screen, Themes and Updates. The launcher stays open while you play unless you turn on "Close when the game is up".
 - **Themes**: each preset is shown as a small picture of the launcher in its colours. Click one and it's used at once, in the launcher, in Prism (when Prism is closed) and in the in-game right-shift menu; Undo goes back. To make your own, pick three colours (background, text, accent) or take them from a picture such as your wallpaper; the other ten are worked out from those. "Fine-tune every colour" opens all thirteen. Your own presets are saved in `~/.config/tux-mc/presets/`, and desktop themes from `~/.config/themes` show up too.
 - **Updates** (in Settings): with "Update by itself" on, the launcher looks for a newer release on every start and installs it, along with the tuxmc mod in the current instance. You don't need to build anything. Every download is checked against its `.sha256`. "Restart now" switches to the new version.
-- Ctrl+1..9 switches pages.
+- Ctrl+1..9 switches pages, and so does Shift with the mouse wheel (or a two-finger swipe), one page per notch, like scrolling workspaces in niri.
+- **Launcher picture** (Settings → Looks): any picture behind Home and the other pages instead of the desktop wallpaper, with how dark the shade over it is. Blur and drift are in the card below it.
 
 ## Themes
 

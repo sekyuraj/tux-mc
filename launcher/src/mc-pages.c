@@ -1579,10 +1579,11 @@ GtkWidget *mc_page_settings(app_t *a)
 
     /* looks */
     section(stack, "looks", "Looks", &c1, &c2);
-    GtkWidget *looks = mc_card("Background", NULL);
-    GtkWidget *bl = spin_row(a, looks, "bg_blur", 6, 0, 30, 1, "Wallpaper blur", NULL);
+    gtk_box_append(GTK_BOX(c1), mc_launcher_bg_card(a));
+    GtkWidget *looks = mc_card("Background effects", NULL);
+    GtkWidget *bl = spin_row(a, looks, "bg_blur", 6, 0, 30, 1, "Picture blur", NULL);
     g_object_set_data(G_OBJECT(bl), "looks", GINT_TO_POINTER(1));
-    look_row(a, looks, "bg_motion", true, "Wallpaper drift", "slow zoom and pan");
+    look_row(a, looks, "bg_motion", true, "Picture drift", "slow zoom and pan");
     look_row(a, looks, "bg_dust", true, "Floating dust", NULL);
     gtk_box_append(GTK_BOX(c1), looks);
     GtkWidget *model = mc_card("Player model", NULL);

@@ -902,7 +902,7 @@ static bool pack_on(void)
         for (char *l = txt; l && *l;) {
             char *e = strchr(l, '\n');
             if (g_str_has_prefix(l, "resourcePacks:")) {
-                char *line = e ? g_strndup(l, e - l) : g_strdup(l);
+                char *line = e ? g_strndup(l, e - l) : g_strdup(l);   /* "\r" (Windows) doesn't matter here */
                 on = strstr(line, want) != NULL;
                 g_free(line);
             }
@@ -923,7 +923,11 @@ static void set_pack_on(bool on)
     char *want = g_strdup_printf("\"file/%s\"", P.pack);
     bool found = false;
     char **lines = g_strsplit(txt ? txt : "", "\n", -1);
+    bool crlf = txt && strstr(txt, "\r\n");          /* the game on Windows writes CRLF */
     for (char **l = lines; *l; l++) {
+        size_t ll = strlen(*l);
+        if (ll && (*l)[ll - 1] == '\r')
+            (*l)[ll - 1] = 0;
         if (g_str_has_prefix(*l, "resourcePacks:[")) {
             found = true;
             GString *nl = g_string_new("resourcePacks:[");
@@ -947,10 +951,12 @@ static void set_pack_on(bool on)
             g_string_append(out, *l);
         }
         if (l[1])
-            g_string_append_c(out, '\n');
+            g_string_append(out, crlf ? "\r\n" : "\n");
     }
     if (!found && on)
-        g_string_append_printf(out, "%sresourcePacks:[\"vanilla\",%s]\n", out->len && out->str[out->len - 1] != '\n' ? "\n" : "", want);
+        g_string_append_printf(out, "%sresourcePacks:[\"vanilla\",%s]%s",
+                               out->len && out->str[out->len - 1] != '\n' ? (crlf ? "\r\n" : "\n") : "", want,
+                               crlf ? "\r\n" : "\n");
     g_file_set_contents(p, out->str, -1, NULL);
     g_strfreev(lines);
     g_free(want);

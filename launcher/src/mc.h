@@ -57,6 +57,7 @@ struct app {
     /* looks (Settings → Launcher), see mc_apply_looks */
     int bg_blur;
     bool bg_motion, bg_dust;
+    double bg_dim;                       /* 0..1: how dark the theme's shade over the picture is */
 
     /* chrome */
     GtkWidget *bg, *stack, *nav[12], *status;
@@ -242,8 +243,13 @@ GBytes *mc_zip_get(mc_zip_t *z, const char *name);
 void mc_zip_names(mc_zip_t *z, void (*each)(const char *name, void *data), void *data);
 void mc_zip_close(mc_zip_t *z);
 
-/* mc-menubg.c: Settings → Title screen (the game's main menu background) */
+/* mc-menubg.c: Settings → Title screen (the game's main menu background), and the
+ * launcher's own background picture (Settings → Looks) */
 GtkWidget *mc_menubg_card(app_t *a);
+GtkWidget *mc_launcher_bg_card(app_t *a);
+/* mc.c: the launcher's background picture: settings.ini bg_image ("" = desktop wallpaper, "none") */
+char *mc_bg_path(void);
+void mc_bg_reload(app_t *a);
 
 /* pages */
 GtkWidget *mc_page_home(app_t *a);
