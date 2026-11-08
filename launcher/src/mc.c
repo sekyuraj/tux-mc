@@ -1358,9 +1358,17 @@ static gboolean on_page_scroll(GtkEventControllerScroll *sc, double dx, double d
     static double acc;
     static gint64 last;
     GdkModifierType st = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(sc));
+    if (g_getenv("TUX_MC_DEBUG_SCROLL"))
+        g_printerr("scroll dx=%g dy=%g state=%x\n", dx, dy, (unsigned)st);
     if (!(st & GDK_SHIFT_MASK))
         return FALSE;
+#ifdef _WIN32
+    if (!(GetKeyState(VK_SHIFT) & 0x8000))          /* the event's state can be stale here: ask Windows */
+        return FALSE;
+#endif
     double d = fabs(dy) >= fabs(dx) ? dy : dx;      /* some systems turn Shift+wheel into sideways scrolling */
+    if (d == 0)
+        return FALSE;
     gint64 now = g_get_monotonic_time();
     if (now - last > 400000)
         acc = 0;
