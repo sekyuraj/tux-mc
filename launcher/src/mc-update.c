@@ -15,6 +15,7 @@
 #include "mc.h"
 
 #include <glib/gstdio.h>
+#include <json-glib/json-glib.h>
 #include <string.h>
 #ifndef _WIN32
 #include <unistd.h>
@@ -288,6 +289,44 @@ static bool install_windows(const char *x, char **err)
 }
 #endif
 
+/* the version in fabric.mod.json of the tuxmc jar in the current instance;
+ * "" when there is no such jar, "0" when it can't be read */
+static char *mod_version(app_t *a)
+{
+    char *mods = g_build_filename(a->mcdir, "mods", NULL), *ver = NULL;
+    GDir *d = g_dir_open(mods, 0, NULL);
+    for (const char *f; d && !ver && (f = g_dir_read_name(d));) {
+        if (!g_str_has_prefix(f, "tuxmc") || !g_str_has_suffix(f, ".jar"))
+            continue;
+        ver = g_strdup("0");
+        char *path = g_build_filename(mods, f, NULL);
+        mc_zip_t *z = mc_zip_open(path);
+        GBytes *b = z ? mc_zip_get(z, "fabric.mod.json") : NULL;
+        JsonParser *p = json_parser_new();
+        gsize n = 0;
+        const char *txt = b ? g_bytes_get_data(b, &n) : NULL;
+        if (txt && json_parser_load_from_data(p, txt, n, NULL)) {
+            JsonNode *r = json_parser_get_root(p);
+            JsonObject *o = r && JSON_NODE_HOLDS_OBJECT(r) ? json_node_get_object(r) : NULL;
+            const char *v = o && json_object_has_member(o, "version") ? json_object_get_string_member(o, "version") : NULL;
+            if (v && *v) {
+                g_free(ver);
+                ver = g_strdup(v);
+            }
+        }
+        g_object_unref(p);
+        if (b)
+            g_bytes_unref(b);
+        if (z)
+            mc_zip_close(z);
+        g_free(path);
+    }
+    if (d)
+        g_dir_close(d);
+    g_free(mods);
+    return ver ? ver : g_strdup("");
+}
+
 /* the mod in the current instance, if it has tuxmc and the game is closed */
 static char *update_mod(app_t *a, const char *base, const char *dir)
 {
@@ -303,7 +342,7 @@ static char *update_mod(app_t *a, const char *base, const char *dir)
     if (!old->len)
         goto out;
     if (mc_game_running(a)) {
-        note = g_strdup("The tuxmc mod wasn't updated: the game is running. Check again after closing it.");
+        note = g_strdup("The tuxmc mod wasn't updated: the game is running. It updates once the game is closed.");
         goto out;
     }
     bool missing = false;
@@ -339,6 +378,8 @@ typedef struct {
     bool quiet;                          /* the check on start: only speak up when there is news */
     bool installed, up_to_date;
     bool building;                       /* released, but GitHub is still making its build */
+    bool mod_wait;
+    bool installed_mod;                  /* only the mod was swapped: say so even on a quiet check */                       /* the mod is old but the game is open: try again later */
     char *tag, *msg;
 } job_t;
 
@@ -365,9 +406,32 @@ static void job_thread(GTask *t, gpointer s, gpointer data, GCancellable *c)
     }
     j->tag = g_uri_unescape_string(tag + 5, NULL);
     g_free(loc);
-    if (!newer(j->tag, TUX_MC_VERSION)) {
+    if (!newer(j->tag, TUX_MC_VERSION) || j->a->upd_installed) {   /* installed: waiting for a restart */
+        /* the launcher is current, but the mod may not be: an earlier update skipped
+         * it because the game was open, or it was put there by hand */
+        char *mv = mod_version(j->a), *note = NULL;
+        if (*mv && newer(j->tag, mv)) {
+            if (mc_game_running(j->a)) {
+                j->mod_wait = true;
+                note = g_strdup_printf("The tuxmc mod is %s, %s is out: it updates once the game is closed.", mv, j->tag);
+            } else {
+                char *dir = g_build_filename(g_get_user_cache_dir(), "tux-mc", "update", NULL);
+                rm_rf(dir);
+                g_mkdir_with_parents(dir, 0755);
+                char *base = g_strdup_printf("%s/download/%s", releases(), j->tag);
+                note = update_mod(j->a, base, dir);
+                if (!note) {
+                    j->installed_mod = true;
+                    note = g_strdup_printf("The tuxmc mod was %s and is now %s.", mv, j->tag);
+                }
+                rm_rf(dir);
+                g_free(dir);
+                g_free(base);
+            }
+        }
         j->up_to_date = true;
-        j->msg = g_strdup_printf("Up to date (%s is the newest).", j->tag);
+        j->msg = note ? note : g_strdup_printf("Up to date (%s is the newest).", j->tag);
+        g_free(mv);
         g_task_return_boolean(t, TRUE);
         return;
     }
@@ -401,6 +465,8 @@ static void job_thread(GTask *t, gpointer s, gpointer data, GCancellable *c)
         ok = install_windows(x, &err);
 #endif
     char *note = ok ? update_mod(j->a, base, dir) : NULL;
+    if (ok && note && mc_game_running(j->a))
+        j->mod_wait = true;
     if (ok) {
         j->installed = true;
         j->msg = g_strdup_printf("Updated to %s. Restart the launcher to use it.%s%s", j->tag, note ? " " : "",
@@ -433,6 +499,16 @@ static gboolean retry_later(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
+/* the mod waits for the game to close; the check itself is cheap */
+static gboolean mod_retry(gpointer data)
+{
+    app_t *a = data;
+    if (mc_game_running(a))
+        return G_SOURCE_CONTINUE;
+    run_job(a, true);
+    return G_SOURCE_REMOVE;
+}
+
 static void job_done(GObject *s, GAsyncResult *r, gpointer data)
 {
     (void)s;
@@ -449,12 +525,14 @@ static void job_done(GObject *s, GAsyncResult *r, gpointer data)
         gtk_button_set_label(GTK_BUTTON(a->upd_button), a->upd_installed ? "Restart now" : "Check for updates");
     }
     set_state(a, j->msg);
-    if (!j->quiet || j->installed || (!j->up_to_date && j->tag))
+    if (!j->quiet || j->installed || j->installed_mod || (!j->up_to_date && j->tag))
         if (a->win)
             mc_status(a, "%s", j->msg);
     /* look again every 2 minutes while the build is being made (for up to 40 min) */
     if (j->building && build_tries++ < 20)
         g_timeout_add_seconds(120, retry_later, a);
+    else if (j->mod_wait)
+        g_timeout_add_seconds(60, mod_retry, a);
     else if (!j->building)
         build_tries = 0;
 }
