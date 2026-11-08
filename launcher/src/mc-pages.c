@@ -1593,6 +1593,9 @@ GtkWidget *mc_page_settings(app_t *a)
 
     /* title screen */
     section(stack, "title", "Title screen", &c1, &c2);
+    gtk_box_set_homogeneous(GTK_BOX(gtk_widget_get_parent(c1)), FALSE);
+    gtk_widget_set_hexpand(c1, TRUE);
+    gtk_widget_set_visible(c2, FALSE);
     gtk_box_append(GTK_BOX(c1), mc_menubg_card(a));
 
     /* themes: one wide column */

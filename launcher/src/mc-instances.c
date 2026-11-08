@@ -675,9 +675,10 @@ GtkWidget *mc_page_instances(app_t *a)
     /* the list */
     GtkWidget *left = mc_card(NULL, NULL);
     gtk_widget_set_hexpand(left, TRUE);
-    gtk_box_append(GTK_BOX(left),
-                   mc_label("Each instance has its own version, mods, worlds and settings. Start plays the one you "
-                            "pick here.", "dim"));
+    GtkWidget *intro = mc_label("Each instance has its own version, mods, worlds and settings. Start plays the one "
+                                "you pick here.", "dim");
+    gtk_label_set_wrap(GTK_LABEL(intro), TRUE);
+    gtk_box_append(GTK_BOX(left), intro);
     a->inst_list = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
     GtkWidget *sc = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
@@ -688,7 +689,7 @@ GtkWidget *mc_page_instances(app_t *a)
 
     /* a new one */
     GtkWidget *right = mc_card("New instance", NULL);
-    gtk_widget_set_size_request(right, 360, -1);
+    gtk_widget_set_size_request(right, 300, -1);
     gtk_widget_set_valign(right, GTK_ALIGN_START);
     a->inst_name = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(a->inst_name), "e.g. Survival 1.21");

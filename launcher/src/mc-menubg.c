@@ -257,8 +257,8 @@ GtkWidget *mc_menubg_card(app_t *a)
     GtkWidget *card = mc_card("Title screen", "A picture of your own behind the game's menus, instead of the "
                                               "spinning world.");
     M.area = gtk_drawing_area_new();
-    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(M.area), 480);
-    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(M.area), 270);
+    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(M.area), 384);
+    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(M.area), 216);
     gtk_widget_set_halign(M.area, GTK_ALIGN_START);
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(M.area), draw, NULL, NULL);
     gtk_widget_add_css_class(M.area, "mcl-canvas");
@@ -468,24 +468,28 @@ GtkWidget *mc_launcher_bg_card(app_t *a)
     GtkWidget *card = mc_card("Launcher picture", "What you see behind Home and the other pages.");
     g_signal_connect(card, "destroy", G_CALLBACK(l_destroy), NULL);
     L.area = gtk_drawing_area_new();
-    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(L.area), 400);
-    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(L.area), 225);
+    gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(L.area), 320);
+    gtk_drawing_area_set_content_height(GTK_DRAWING_AREA(L.area), 180);
     gtk_widget_set_halign(L.area, GTK_ALIGN_START);
     gtk_widget_add_css_class(L.area, "mcl-canvas");
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(L.area), l_draw, NULL, NULL);
     gtk_box_append(GTK_BOX(card), L.area);
-    GtkWidget *br = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *br = gtk_flow_box_new();         /* wraps in a narrow window */
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(br), GTK_SELECTION_NONE);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(br), 8);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(br), 8);
+    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(br), 3);
     GtkWidget *ch = gtk_button_new_with_label("Choose a picture…");
     g_signal_connect(ch, "clicked", G_CALLBACK(l_choose), NULL);
-    gtk_box_append(GTK_BOX(br), ch);
+    gtk_flow_box_append(GTK_FLOW_BOX(br), ch);
     if (MC_LINUX) {                      /* the desktop theme switcher (~/.config/themes) only exists here */
         L.wall = gtk_button_new_with_label("Desktop wallpaper");
         g_signal_connect(L.wall, "clicked", G_CALLBACK(l_wallpaper), NULL);
-        gtk_box_append(GTK_BOX(br), L.wall);
+        gtk_flow_box_append(GTK_FLOW_BOX(br), L.wall);
     }
     GtkWidget *no = gtk_button_new_with_label("No picture");
     g_signal_connect(no, "clicked", G_CALLBACK(l_none), NULL);
-    gtk_box_append(GTK_BOX(br), no);
+    gtk_flow_box_append(GTK_FLOW_BOX(br), no);
     gtk_box_append(GTK_BOX(card), br);
     GtkWidget *dr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     GtkWidget *dl = mc_label("Darken", NULL);

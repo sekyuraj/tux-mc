@@ -1293,7 +1293,11 @@ GtkWidget *mc_page_packs(app_t *a)
     gtk_search_entry_set_placeholder_text(GTK_SEARCH_ENTRY(P.search), "Find a texture: stone, diamond sword, zombie…");
     g_signal_connect(P.search, "search-changed", G_CALLBACK(on_filter), NULL);
     gtk_box_append(GTK_BOX(left), P.search);
-    GtkWidget *chips = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    GtkWidget *chips = gtk_flow_box_new();     /* wraps when the window is narrow */
+    gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(chips), GTK_SELECTION_NONE);
+    gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(chips), 8);
+    gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(chips), 6);
+    gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(chips), 6);
     GtkWidget *first = NULL;
     for (size_t i = 0; i < G_N_ELEMENTS(CHIP_ORDER); i++) {
         int c = CHIP_ORDER[i];
@@ -1307,7 +1311,7 @@ GtkWidget *mc_page_packs(app_t *a)
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(b), TRUE);
         g_signal_connect(b, "toggled", G_CALLBACK(on_chip), GINT_TO_POINTER(c));
         P.chips[c] = b;
-        gtk_box_append(GTK_BOX(chips), b);
+        gtk_flow_box_append(GTK_FLOW_BOX(chips), b);
     }
     gtk_box_append(GTK_BOX(left), chips);
     GtkWidget *gsc = gtk_scrolled_window_new();
@@ -1329,7 +1333,7 @@ GtkWidget *mc_page_packs(app_t *a)
     GtkWidget *right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     GtkWidget *rsc = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(rsc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_widget_set_size_request(rsc, 520, -1);
+    gtk_widget_set_size_request(rsc, 430, -1);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(rsc), right);
 
     P.empty = mc_card("How it works", NULL);
@@ -1375,7 +1379,7 @@ GtkWidget *mc_page_packs(app_t *a)
     gtk_box_append(GTK_BOX(P.editor), tr);
 
     P.canvas = gtk_drawing_area_new();
-    gtk_widget_set_size_request(P.canvas, 360, 320);
+    gtk_widget_set_size_request(P.canvas, 320, 300);
     gtk_widget_add_css_class(P.canvas, "mcl-canvas");
     gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(P.canvas), draw_canvas, NULL, NULL);
     GtkGesture *g = gtk_gesture_drag_new();
@@ -1395,7 +1399,7 @@ GtkWidget *mc_page_packs(app_t *a)
 
     /* colour: the wheel, and the texture's own colours next to it */
     GtkWidget *cr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
-    P.colour_btn = mc_colour_wheel_new(true, 180);
+    P.colour_btn = mc_colour_wheel_new(true, 170);
     mc_colour_on_change(P.colour_btn, on_colour, NULL);
     gtk_box_append(GTK_BOX(cr), P.colour_btn);
     GtkWidget *uc = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);

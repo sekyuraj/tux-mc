@@ -1080,7 +1080,7 @@ GtkWidget *mc_page_hats(app_t *a)
 
     /* left: yours + starting points */
     GtkWidget *left = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_widget_set_size_request(left, 270, -1);
+    gtk_widget_set_size_request(left, 226, -1);
     GtkWidget *lsc = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(lsc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(lsc), left);
@@ -1110,7 +1110,7 @@ GtkWidget *mc_page_hats(app_t *a)
         gtk_flow_box_append(GTK_FLOW_BOX(H.starts), t);
     }
     gtk_box_append(GTK_BOX(st), H.starts);
-    GtkWidget *vox = small_button("Import a MagicaVoxel file…", "a .vox model; big ones are scaled to fit",
+    GtkWidget *vox = small_button("Open a .vox file…", "a MagicaVoxel model; big ones are scaled to fit",
                                   G_CALLBACK(on_vox), a);
     gtk_box_append(GTK_BOX(st), vox);
     gtk_box_append(GTK_BOX(left), st);
@@ -1130,8 +1130,8 @@ GtkWidget *mc_page_hats(app_t *a)
     GtkWidget *sp = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_hexpand(sp, TRUE);
     gtk_box_append(GTK_BOX(tools), sp);
-    gtk_box_append(GTK_BOX(tools), small_button("Undo", "Ctrl+Z", G_CALLBACK(on_undo), NULL));
-    gtk_box_append(GTK_BOX(tools), small_button("Redo", "Ctrl+Y", G_CALLBACK(on_redo), NULL));
+    gtk_box_append(GTK_BOX(tools), small_button("↶", "Undo (Ctrl+Z)", G_CALLBACK(on_undo), NULL));
+    gtk_box_append(GTK_BOX(tools), small_button("↷", "Redo (Ctrl+Y)", G_CALLBACK(on_redo), NULL));
     gtk_box_append(GTK_BOX(mid), tools);
 
     GtkWidget *frame = gtk_overlay_new();
@@ -1160,6 +1160,10 @@ GtkWidget *mc_page_hats(app_t *a)
     gtk_widget_set_valign(hint, GTK_ALIGN_END);
     gtk_widget_set_margin_bottom(hint, 10);
     gtk_widget_set_can_target(hint, FALSE);
+    gtk_label_set_wrap(GTK_LABEL(hint), TRUE);
+    gtk_label_set_justify(GTK_LABEL(hint), GTK_JUSTIFY_CENTER);
+    gtk_widget_set_margin_start(hint, 12);
+    gtk_widget_set_margin_end(hint, 12);
     gtk_overlay_add_overlay(GTK_OVERLAY(frame), hint);
     gtk_box_append(GTK_BOX(mid), frame);
 
@@ -1171,19 +1175,23 @@ GtkWidget *mc_page_hats(app_t *a)
     g_signal_connect(H.name, "activate", G_CALLBACK(on_save), NULL);
     gtk_box_append(GTK_BOX(bottom), H.name);
     gtk_box_append(GTK_BOX(bottom), small_button("Save", "Ctrl+S", G_CALLBACK(on_save), NULL));
+    gtk_box_append(GTK_BOX(mid), bottom);
+    GtkWidget *bottom2 = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     H.wear = small_button("Wear it", "save it and put it on, in game too", G_CALLBACK(on_wear), a);
     gtk_widget_add_css_class(H.wear, "suggested-action");
-    gtk_box_append(GTK_BOX(bottom), H.wear);
-    gtk_box_append(GTK_BOX(bottom), small_button("Take off", NULL, G_CALLBACK(on_take_off), a));
+    gtk_box_append(GTK_BOX(bottom2), H.wear);
+    gtk_box_append(GTK_BOX(bottom2), small_button("Take off", NULL, G_CALLBACK(on_take_off), a));
     GtkWidget *del = small_button("Delete", "moves the saved file to the trash", G_CALLBACK(on_delete), a);
     gtk_widget_add_css_class(del, "mcl-danger");
-    gtk_box_append(GTK_BOX(bottom), del);
-    gtk_box_append(GTK_BOX(mid), bottom);
+    gtk_box_append(GTK_BOX(bottom2), del);
+    gtk_box_append(GTK_BOX(mid), bottom2);
     GtkWidget *irow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
     H.info = mc_label("", "dim");
     H.msg = mc_label("", NULL);
     gtk_widget_set_hexpand(H.msg, TRUE);
     gtk_label_set_xalign(GTK_LABEL(H.msg), 1);
+    gtk_label_set_wrap(GTK_LABEL(H.msg), TRUE);
+    gtk_label_set_wrap(GTK_LABEL(H.info), TRUE);
     gtk_box_append(GTK_BOX(irow), H.info);
     gtk_box_append(GTK_BOX(irow), H.msg);
     gtk_box_append(GTK_BOX(mid), irow);
@@ -1193,16 +1201,16 @@ GtkWidget *mc_page_hats(app_t *a)
     GtkWidget *right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     GtkWidget *rsc = gtk_scrolled_window_new();
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(rsc), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_widget_set_size_request(rsc, 260, -1);
+    gtk_widget_set_size_request(rsc, 236, -1);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(rsc), right);
     GtkWidget *cc = mc_card("Colour", NULL);
-    H.colour_btn = mc_colour_wheel_new(false, 200);
+    H.colour_btn = mc_colour_wheel_new(false, 190);
     mc_colour_on_change(H.colour_btn, on_colour, NULL);
     gtk_box_append(GTK_BOX(cc), H.colour_btn);
     GtkWidget *sw = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(sw), GTK_SELECTION_NONE);
     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(sw), 8);
-    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(sw), 6);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(sw), 5);
     for (size_t i = 0; i < G_N_ELEMENTS(SWATCHES); i++)
         gtk_flow_box_append(GTK_FLOW_BOX(sw), swatch(SWATCHES[i]));
     gtk_box_append(GTK_BOX(cc), sw);
@@ -1210,7 +1218,7 @@ GtkWidget *mc_page_hats(app_t *a)
     H.used = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(H.used), GTK_SELECTION_NONE);
     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(H.used), 8);
-    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(H.used), 6);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(H.used), 5);
     gtk_box_append(GTK_BOX(cc), H.used);
     gtk_box_append(GTK_BOX(right), cc);
 

@@ -1201,7 +1201,7 @@ GtkWidget *mc_page_home(app_t *a)
     gtk_widget_add_css_class(page, "mcl-page");
 
     a->stage = mc_stage(a, &a->view, draw_stage);
-    gtk_widget_set_size_request(a->stage, 420, 520);
+    gtk_widget_set_size_request(a->stage, 300, 460);
     gtk_box_append(GTK_BOX(page), a->stage);
 
     GtkWidget *right = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
@@ -1249,7 +1249,7 @@ GtkWidget *mc_page_home(app_t *a)
     GtkWidget *flow = gtk_flow_box_new();
     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(flow), GTK_SELECTION_NONE);
     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(flow), 5);
-    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(flow), 5);
+    gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(flow), 3);
     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(flow), 6);
     gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(flow), 6);
     a->cape_flow = flow;
