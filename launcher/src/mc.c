@@ -1358,8 +1358,6 @@ static gboolean on_page_scroll(GtkEventControllerScroll *sc, double dx, double d
     static double acc;
     static gint64 last;
     GdkModifierType st = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(sc));
-    if (g_getenv("TUX_MC_DEBUG_SCROLL"))
-        g_printerr("scroll dx=%g dy=%g state=%x\n", dx, dy, (unsigned)st);
     if (!(st & GDK_SHIFT_MASK))
         return FALSE;
 #ifdef _WIN32
