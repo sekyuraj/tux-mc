@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "tuxmc",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "name": "tux client",
   "description": "Menu on right shift: network map, server tools, waypoints, emotes and capes that other tux-mc players see, zoom, fullbright, HUD.",
   "authors": ["sekyuraj"],

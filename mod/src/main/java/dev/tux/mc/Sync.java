@@ -99,7 +99,7 @@ public final class Sync {
     private static String hatSent = "";
     private static long hatDue;
     private static final long[] emoteTimes = new long[6];
-    private static long capeDue, askDue;
+    private static long capeDue, askDue, resendAt;
     private static int askedCount;
 
     /* ---------------------------------------------------------------- state */
@@ -166,6 +166,18 @@ public final class Sync {
             hatSent = hk;
             hatDue = t + 3000;
             publishHat();
+        }
+
+        /* every few minutes the same signed events again: a relay that was down or busy gets them too */
+        if (t >= resendAt) {
+            if (resendAt != 0)
+                for (Relay r : relays) {
+                    if (capeMsg != null)
+                        r.send(capeMsg);
+                    if (hatMsg != null)
+                        r.send(hatMsg);
+                }
+            resendAt = t + 4 * 60_000;
         }
 
         /* ask for the capes of players we see */
@@ -390,10 +402,15 @@ public final class Sync {
             o.addProperty("ks", Base64.getEncoder().encodeToString(kd.keySignature()));
             o.addProperty("sg", Base64.getEncoder().encodeToString(sig));
             String msg = "[\"EVENT\"," + Nostr.event(secret, at, kind, tags, o.toString()) + "]";
-            if (kind == KIND_CAPE && tags.get(0)[1].equals("tuxmc-hat"))
-                hatMsg = msg;
-            else if (kind == KIND_CAPE)
-                capeMsg = msg;
+            if (kind == KIND_CAPE) {
+                boolean hat = tags.get(0)[1].equals("tuxmc-hat");
+                if (hat)
+                    hatMsg = msg;
+                else
+                    capeMsg = msg;
+                TuxMc.LOG.info("tuxmc: sync: sending your {} to {} relays", hat ? "hat" : "cape",
+                        relays.stream().filter(r -> r.open).count());
+            }
             Minecraft.getInstance().execute(() -> {
                 for (Relay r : relays)
                     r.send(msg);
@@ -469,11 +486,20 @@ public final class Sync {
     /* ----------------------------------------------------------- receiving */
 
     /** runs on a relay thread */
-    private static void received(String msg) {
+    private static void received(Relay from, String msg) {
         try {
             JsonArray a = JsonParser.parseString(msg).getAsJsonArray();
-            if (SELF && !a.get(0).getAsString().equals("EVENT"))
+            String type = a.get(0).getAsString();
+            if (SELF && !type.equals("EVENT"))
                 TuxMc.LOG.info("tuxmc: sync: relay says {}", msg.length() > 200 ? msg.substring(0, 200) : msg);
+            /* a relay that turns our events down is the usual reason nobody sees your cape or hat: say so */
+            if (type.equals("OK") && a.size() >= 3 && !a.get(2).getAsBoolean())
+                TuxMc.LOG.warn("tuxmc: sync: {} refused an event: {}", from.url, a.size() > 3 ? a.get(3).getAsString() : "");
+            else if (type.equals("OK") && a.size() >= 3 && !from.accepted) {
+                from.accepted = true;
+                TuxMc.LOG.info("tuxmc: sync: {} took our events", from.url);
+            } else if (type.equals("NOTICE") || type.equals("CLOSED"))
+                TuxMc.LOG.warn("tuxmc: sync: {} says {}", from.url, msg.length() > 200 ? msg.substring(0, 200) : msg);
             if (a.size() < 3 || !a.get(0).getAsString().equals("EVENT"))
                 return;
             JsonObject ev = a.get(2).getAsJsonObject();
@@ -619,6 +645,7 @@ public final class Sync {
         volatile boolean open, connecting;
         long retryAt, backoff = 5000;
         String capeReq;
+        boolean accepted;                    /* it said OK to one of ours (logged once) */
         private final StringBuilder buf = new StringBuilder();
         private CompletableFuture<?> chain = CompletableFuture.completedFuture(null);
 
@@ -629,6 +656,8 @@ public final class Sync {
             http.newWebSocketBuilder().buildAsync(URI.create(url), this).whenComplete((w, err) -> {
                 connecting = false;
                 if (err != null) {
+                    if (backoff == 5000)
+                        TuxMc.LOG.warn("tuxmc: sync: can't reach {}: {}", url, err.getCause() != null ? err.getCause().toString() : err.toString());
                     retryAt = System.currentTimeMillis() + backoff;
                     backoff = Math.min(backoff * 2, 120_000);
                     return;
@@ -641,6 +670,7 @@ public final class Sync {
                     ws = w;
                     open = true;
                     backoff = 5000;
+                    TuxMc.LOG.info("tuxmc: sync: connected to {}", url);
                     if (server != null)
                         send(emoteReq());
                     if (capeReq != null)
@@ -684,7 +714,7 @@ public final class Sync {
                 String m = buf.toString();
                 buf.setLength(0);
                 if (m.length() < 200_000)
-                    received(m);
+                    received(this, m);
             }
             w.request(1);
             return null;

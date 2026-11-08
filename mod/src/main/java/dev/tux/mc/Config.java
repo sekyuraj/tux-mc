@@ -45,7 +45,8 @@ public final class Config {
     public static boolean sync = true;
     public static boolean syncPicture = true;       /* send your Picture cape, and show other people's */
     public static boolean syncHats = true;          /* show other people's hats */
-    public static String syncRelays = "wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net";
+    public static String syncRelays = "wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net,wss://relay.nostr.net,"
+            + "wss://nostr.oxtr.dev,wss://offchain.pub";
     /* combat */
     public static boolean hitFix = true;            /* no half-second click block after a miss */
     /* servers */
@@ -104,7 +105,13 @@ public final class Config {
                 } catch (NumberFormatException ignored) {
                 }
             }
-            /* capes that were removed in 1.2: wear Tux instead of nothing */
+            /* the relay list from before 1.5.1 (three relays): the new one has more, so one ban doesn't stop sharing */
+            if (syncRelays.equals("wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net")) {
+                syncRelays = "wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net,wss://relay.nostr.net,"
+                        + "wss://nostr.oxtr.dev,wss://offchain.pub";
+                save();
+            }
+                        /* capes that were removed in 1.2: wear Tux instead of nothing */
             if (java.util.Set.of("theme", "aurora", "ember", "ocean").contains(cape)) {
                 cape = "tux";
                 save();
