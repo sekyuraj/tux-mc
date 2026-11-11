@@ -28,7 +28,10 @@ public class AvatarRendererMixin {
         if (self != null)
             me = false;                          /* test: draw yourself the way others see you */
         java.util.UUID id = self != null ? self : entity.getUUID();
-        Sync.RemoteEmote re = me ? null : Sync.emote(id);
+        /* adaptive mode under pressure: players 48+ blocks away skip emote poses and hats (capes stay) */
+        boolean far = !me && dev.tux.mc.Perf.pressure && Minecraft.getInstance().player != null
+                && entity.distanceToSqr(Minecraft.getInstance().player) > 48 * 48;
+        Sync.RemoteEmote re = me || far ? null : Sync.emote(id);
         if (me && Emotes.current != null) {
             h.tuxmc$set(Emotes.current, Emotes.time());
             Emotes.extract(s, Emotes.current, Emotes.time());
@@ -38,7 +41,7 @@ public class AvatarRendererMixin {
         } else {
             h.tuxmc$set(null, 0);
         }
-        ((dev.tux.mc.Hats.Holder) s).tuxmc$setHat(me ? dev.tux.mc.Hats.own() : dev.tux.mc.Hats.remote(id));
+        ((dev.tux.mc.Hats.Holder) s).tuxmc$setHat(me ? dev.tux.mc.Hats.own() : far ? null : dev.tux.mc.Hats.remote(id));
         if (s.skin != null) {
             var cape = me ? Capes.current() : Capes.remote(id, Sync.cape(id));
             if (cape != null) {

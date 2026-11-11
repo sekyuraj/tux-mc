@@ -616,6 +616,34 @@ public class TuxScreen extends Screen {
                 () -> Config.waypointArrow = !Config.waypointArrow);
         toggle(g, x, y0, w, mx, my, al, dt, "Streamer mode", "hide coordinates everywhere", Config.streamer,
                 () -> Config.streamer = !Config.streamer);
+        section(g, x, y0, "Performance", al);
+        toggle(g, x, y0, w, mx, my, al, dt, "Performance mode", "tux-mc's own speed-ups below; off = how 1.5 ran",
+                Config.perf, () -> Config.perf = !Config.perf);
+        if (Config.perf) {
+            toggle(g, x, y0, w, mx, my, al, dt, "Fast entity culling",
+                    "off-screen mobs and items skipped before the costly checks", Config.perfEntities,
+                    () -> Config.perfEntities = !Config.perfEntities);
+            toggle(g, x, y0, w, mx, my, al, dt, "Light HUD", "info box text made 20 times a second, not every frame",
+                    Config.perfHud, () -> Config.perfHud = !Config.perfHud);
+            toggle(g, x, y0, w, mx, my, al, dt, "Capes in the background",
+                    "painted off the render thread: no hitch when one shows up", Config.perfCosmetics,
+                    () -> Config.perfCosmetics = !Config.perfCosmetics);
+            toggle(g, x, y0, w, mx, my, al, dt, "Free unused capes", "textures of players gone for 5 minutes",
+                    Config.perfMemory, () -> Config.perfMemory = !Config.perfMemory);
+            toggle(g, x, y0, w, mx, my, al, dt, "Adaptive", "when fps drop, far players' emotes and hats pause",
+                    Config.adaptive, () -> Config.adaptive = !Config.adaptive);
+            cycle(g, x, y0, w, mx, my, al, dt, "Adaptive below", "the fps where it steps in",
+                    Config.adaptiveFps + " fps", () -> Config.adaptiveFps = switch (Config.adaptiveFps) {
+                        case 30 -> 45;
+                        case 45 -> 60;
+                        case 60 -> 90;
+                        case 90 -> 120;
+                        case 120 -> 144;
+                        default -> 30;
+                    });
+            toggle(g, x, y0, w, mx, my, al, dt, "Diagnostics", "frame times and culling numbers in the info box",
+                    Config.perfDiagnostics, () -> Config.perfDiagnostics = !Config.perfDiagnostics);
+        }
         section(g, x, y0, "Servers", al);
         toggle(g, x, y0, w, mx, my, al, dt, "Distant Horizons on servers", "with shaders it crashes AMD drivers on join",
                 Config.dhOnServers, () -> Config.dhOnServers = !Config.dhOnServers);

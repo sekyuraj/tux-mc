@@ -22,7 +22,10 @@
     "TicketViewMixin",
     "ScrollZoomMixin",
     "FirstPersonEmoteMixin",
-    "PanoramaMixin"
+    "PanoramaMixin",
+    "FrameMixin",
+    "FrustumAccessor",
+    "EntityCullMixin"
   ],
   "injectors": {
     "defaultRequire": 1

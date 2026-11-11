@@ -1190,7 +1190,7 @@ GtkWidget *mc_page_mods(app_t *a)
 static char *instance_cfg(app_t *a) { return g_build_filename(a->instdir, "instance.cfg", NULL); }
 
 /* set key=value in an INI-ish file under [General] (Prism's format) */
-static void ini_set(GString *s, const char *key, const char *val)
+void mc_ini_set(GString *s, const char *key, const char *val)
 {
     char *pre = g_strdup_printf("\n%s=", key);
     char *at = strstr(s->str, pre);
@@ -1225,13 +1225,15 @@ void mc_settings_apply(app_t *a)
     g_string_append(s, txt);
     g_free(txt);
     char buf[64];
-    int max_mb = mc_cfg_int("memory_mb", mc_cfg_int("memory_gb", 10) * 1024);
-    int min_mb = MIN(mc_cfg_int("memory_min_mb", 4096), max_mb);
-    ini_set(s, "OverrideMemory", "true");
+    int max_mb = mc_cfg_int("memory_mb", mc_cfg_int("memory_gb", mc_sys_default_heap_mb() / 1024) * 1024);
+    /* a big start heap costs start-up time with ZGC (it's committed before the game runs):
+     * ~40 ms per GB here, so the default starts small and grows */
+    int min_mb = MIN(mc_cfg_int("memory_min_mb", 2048), max_mb);
+    mc_ini_set(s, "OverrideMemory", "true");
     g_snprintf(buf, sizeof buf, "%d", max_mb);
-    ini_set(s, "MaxMemAlloc", buf);
+    mc_ini_set(s, "MaxMemAlloc", buf);
     g_snprintf(buf, sizeof buf, "%d", min_mb);
-    ini_set(s, "MinMemAlloc", buf);
+    mc_ini_set(s, "MinMemAlloc", buf);
 
     char *extra = mc_cfg_str("jvm_args", "");
     /* UseTransparentHugePages only exists on Linux: java won't start with it elsewhere */
@@ -1239,8 +1241,8 @@ void mc_settings_apply(app_t *a)
         ? "-XX:+UseZGC -XX:+UseCompactObjectHeaders -XX:+PerfDisableSharedMem"
         : "-XX:+UseG1GC -XX:+UseCompactObjectHeaders -XX:+PerfDisableSharedMem",
         MC_LINUX && mc_cfg_bool("zgc", true) ? " -XX:+UseTransparentHugePages" : "", extra);
-    ini_set(s, "OverrideJavaArgs", "true");
-    ini_set(s, "JvmArgs", g_strstrip(jvm));
+    mc_ini_set(s, "OverrideJavaArgs", "true");
+    mc_ini_set(s, "JvmArgs", g_strstrip(jvm));
     g_free(jvm);
     g_free(extra);
 
@@ -1253,6 +1255,12 @@ void mc_settings_apply(app_t *a)
         g_string_append(w, " SDL_VIDEO_DRIVER=wayland");
     if (MC_LINUX && mc_cfg_bool("glthread", true))
         g_string_append(w, " mesa_glthread=true");
+    if (MC_LINUX && mc_cfg_bool("gpu_offload", true)) {
+        char *gpu = mc_sys_gpu_offload_env();         /* laptops: render on the dedicated GPU */
+        if (gpu)
+            g_string_append_printf(w, " %s", gpu);
+        g_free(gpu);
+    }
     char *env = mc_cfg_str("env", "");
     if (MC_LINUX && *g_strstrip(env))
         g_string_append_printf(w, " %s", env);
@@ -1263,21 +1271,27 @@ void mc_settings_apply(app_t *a)
     if (*g_strstrip(wrap))
         g_string_append_printf(w, "%s%s", w->len ? " " : "", wrap);
     g_free(wrap);
-    ini_set(s, "OverrideCommands", w->len ? "true" : "false");
-    ini_set(s, "WrapperCommand", w->str);
+    char *fast = mc_fast_wrap_prefix(a);     /* tux-mc-wrap: keeps the launch for the next fast start */
+    if (fast) {
+        g_string_prepend_c(w, ' ');
+        g_string_prepend(w, fast);
+        g_free(fast);
+    }
+    mc_ini_set(s, "OverrideCommands", w->len ? "true" : "false");
+    mc_ini_set(s, "WrapperCommand", w->str);
     g_string_free(w, TRUE);
 
-    ini_set(s, "OverrideWindow", "true");
-    ini_set(s, "LaunchMaximized", mc_cfg_bool("maximized", false) ? "true" : "false");
+    mc_ini_set(s, "OverrideWindow", "true");
+    mc_ini_set(s, "LaunchMaximized", mc_cfg_bool("maximized", false) ? "true" : "false");
     g_snprintf(buf, sizeof buf, "%d", mc_cfg_int("win_w", 1280));
-    ini_set(s, "MinecraftWinWidth", buf);
+    mc_ini_set(s, "MinecraftWinWidth", buf);
     g_snprintf(buf, sizeof buf, "%d", mc_cfg_int("win_h", 720));
-    ini_set(s, "MinecraftWinHeight", buf);
+    mc_ini_set(s, "MinecraftWinHeight", buf);
 
-    ini_set(s, "OverrideConsole", "true");
-    ini_set(s, "ShowConsole", mc_cfg_bool("console", false) ? "true" : "false");
-    ini_set(s, "ShowConsoleOnError", mc_cfg_bool("console_on_error", true) ? "true" : "false");
-    ini_set(s, "AutoCloseConsole", "false");
+    mc_ini_set(s, "OverrideConsole", "true");
+    mc_ini_set(s, "ShowConsole", mc_cfg_bool("console", false) ? "true" : "false");
+    mc_ini_set(s, "ShowConsoleOnError", mc_cfg_bool("console_on_error", true) ? "true" : "false");
+    mc_ini_set(s, "AutoCloseConsole", "false");
 
     g_file_set_contents(p, s->str + 1, s->len - 1, NULL);
     g_string_free(s, TRUE);
@@ -1509,14 +1523,14 @@ GtkWidget *mc_page_settings(app_t *a)
         gtk_scale_add_mark(GTK_SCALE(a->set_mem), g, GTK_POS_BOTTOM, NULL);
     a->set_mem_label = mc_label("", "mcl-h2");
     gtk_label_set_width_chars(GTK_LABEL(a->set_mem_label), 7);
-    int mb = mc_cfg_int("memory_mb", mc_cfg_int("memory_gb", 10) * 1024);
+    int mb = mc_cfg_int("memory_mb", mc_cfg_int("memory_gb", mc_sys_default_heap_mb() / 1024) * 1024);
     gtk_range_set_value(GTK_RANGE(a->set_mem), MIN(mb, total * 1024) / 1024.0);
     mem_label(a, mb);
     g_signal_connect(a->set_mem, "value-changed", G_CALLBACK(on_mem), a);
     gtk_box_append(GTK_BOX(mr), a->set_mem);
     gtk_box_append(GTK_BOX(mr), a->set_mem_label);
     gtk_box_append(GTK_BOX(mem), mr);
-    spin_row(a, mem, "memory_min_mb", 4096, 512, total * 1024, 512, "Start with (MB)",
+    spin_row(a, mem, "memory_min_mb", 2048, 512, total * 1024, 512, "Start with (MB)",
              "memory taken right away; the rest grows as needed");
     gtk_box_append(GTK_BOX(c1), mem);
 
@@ -1536,6 +1550,15 @@ GtkWidget *mc_page_settings(app_t *a)
         a->set_gamemode = set_row(a, speed, "gamemode", true, "Gamemode",
                                   "performance CPU governor while playing (needs gamemoderun)");
     }
+    if (MC_LINUX)
+        set_row(a, speed, "gpu_offload", true, "Dedicated GPU",
+                "laptops with two GPUs: the game renders on the dedicated one (DRI_PRIME / PRIME offload)");
+    if (MC_LINUX)
+        set_row(a, speed, "fast_start", true, "Fast start",
+                "START runs the game itself, without Prism signing in again each time (Prism still does it when the sign-in runs out)");
+    if (MC_LINUX)
+        set_row(a, speed, "aot_cache", true, "Class cache",
+                "Java keeps what it loads at start ready for the next start (Java 25+, with Fast start)");
     a->set_zgc = set_row(a, speed, "zgc", true, "Low-pause garbage collector",
                          "ZGC: no stutter when Java cleans up memory. Off = G1");
     if (MC_LINUX)

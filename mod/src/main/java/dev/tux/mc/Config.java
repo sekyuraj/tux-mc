@@ -61,6 +61,15 @@ public final class Config {
     public static boolean autoReconnect = false;
     public static int reconnectDelay = 5;
     public static boolean deathPoints = true;
+    /* performance (Settings, Performance): tux-mc's own optimizations; off = how 1.5 worked */
+    public static boolean perf = true;              /* master switch */
+    public static boolean perfEntities = true;      /* allocation-free off-screen entity test before Sodium's and vanilla's */
+    public static boolean perfHud = true;           /* HUD text built once per tick, not every frame */
+    public static boolean perfCosmetics = true;     /* cape textures painted off the render thread (no hitch when one appears) */
+    public static boolean perfMemory = true;        /* other players' cape textures freed when they've been gone 5 min */
+    public static boolean adaptive = true;          /* when frames are slow, far players' emotes/hats and HUD refreshes ease off */
+    public static int adaptiveFps = 60;             /* below this the adaptive mode steps in */
+    public static boolean perfDiagnostics = false;  /* frame time graph + numbers in the HUD */
     /* set once the menu key has been moved off an old "unbound" save */
     public static boolean menuKeyChecked = false;
 
@@ -119,6 +128,17 @@ public final class Config {
         } catch (Exception e) {
             TuxMc.LOG.warn("tuxmc: config: {}", e.toString());
         }
+        applied();
+    }
+
+    /* TUXMC_PERF=0/1 overrides the master switch for benchmarks, without touching the saved setting */
+    private static final String PERF_OVERRIDE = System.getenv("TUXMC_PERF");
+
+    /** the master switch as it applies now */
+    public static boolean perfOn() { return PERF_OVERRIDE != null ? !PERF_OVERRIDE.equals("0") : perf; }
+
+    private static void applied() {
+        EntityCull.on = perfOn() && perfEntities;
     }
 
     public static void save() {
@@ -134,6 +154,7 @@ public final class Config {
         } catch (Exception e) {
             TuxMc.LOG.warn("tuxmc: config save: {}", e.toString());
         }
+        applied();
     }
 
     private Config() {}

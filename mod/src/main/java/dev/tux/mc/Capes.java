@@ -72,6 +72,7 @@ public final class Capes {
         String k = Config.capeImage + "@" + mtime(Config.capeImage);
         if (!k.equals(imageKey)) {
             imageKey = k;
+            generation++;                        /* a picture being painted is out of date now */
             made.remove("image");
             previews.keySet().removeIf(x -> x.startsWith("image@"));
         }
@@ -81,27 +82,75 @@ public final class Capes {
         invalidate();
         if (made.containsKey(id))
             return made.get(id);
-        ClientAsset.Texture t = make(id);
-        made.put(id, t);
-        return t;
+        if (!background()) {
+            ClientAsset.Texture t = upload(id, image(id));
+            made.put(id, t);
+            return t;
+        }
+        /* Config.perfCosmetics: paint on the cape thread, upload on the render thread when it's done;
+         * until then no cape (a frame or two), instead of a 20-80 ms hitch for a 2048x1024 logo */
+        if (pending.add(id)) {
+            int gen = generation;
+            PAINT.execute(() -> {
+                NativeImage img = image(id);
+                Minecraft.getInstance().execute(() -> {
+                    pending.remove(id);
+                    if (gen != generation) {
+                        if (img != null)
+                            img.close();
+                        return;
+                    }
+                    made.put(id, upload(id, img));
+                });
+            });
+        }
+        return null;
     }
 
-    private static ClientAsset.Texture make(String id) {
+    /* the cape thread: painting only (libtuxmc + NativeImage memory); GL stays on the render thread */
+    private static final java.util.concurrent.ExecutorService PAINT = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "tuxmc-capes");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
+    private static final java.util.Set<String> pending = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static volatile int generation;
+
+    private static boolean background() { return Config.perfOn() && Config.perfCosmetics; }
+
+    private static NativeImage image(String id) {
         int s = scale(id);
         int[] px = paint(id, s);
-        if (px == null)
-            return null;
-        int w = 64 * s, h = 32 * s;
+        return px == null ? null : toImage(px, 64 * s, 32 * s);
+    }
+
+    private static NativeImage toImage(int[] px, int w, int h) {
         NativeImage img = new NativeImage(w, h, true);
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
                 img.setPixel(x, y, px[y * w + x]);
+        return img;
+    }
+
+    private static ClientAsset.Texture upload(String id, NativeImage img) {
+        if (img == null)
+            return null;
         Identifier loc = Identifier.fromNamespaceAndPath("tuxmc", "capes/" + id);
         Minecraft.getInstance().getTextureManager().register(loc, new DynamicTexture(() -> "tuxmc cape " + id, img));
         return new ClientAsset.ResourceTexture(loc, loc);
     }
 
-    private record Made(long at, ClientAsset.Texture tex) {}
+    private static final class Made {
+        final long at;
+        final ClientAsset.Texture tex;
+        long used = System.currentTimeMillis();
+
+        Made(long at, ClientAsset.Texture tex) {
+            this.at = at;
+            this.tex = tex;
+        }
+    }
 
     private static final Map<java.util.UUID, Made> remote = new HashMap<>();
 
@@ -114,23 +163,65 @@ public final class Capes {
         if (!own)
             return get(c.id());
         Made m = remote.get(u);
-        if (m != null && m.at == c.at())
+        if (m != null && m.at == c.at()) {
+            m.used = System.currentTimeMillis();
             return m.tex;
+        }
+        if (!background()) {
+            ClientAsset.Texture t = uploadRemote(u, remoteImage(c));
+            remote.put(u, new Made(c.at(), t));
+            return t;
+        }
+        if (remotePending.add(u)) {
+            PAINT.execute(() -> {
+                NativeImage img = remoteImage(c);
+                Minecraft.getInstance().execute(() -> {
+                    remotePending.remove(u);
+                    remote.put(u, new Made(c.at(), uploadRemote(u, img)));
+                });
+            });
+        }
+        return m != null ? m.tex : null;         /* their old cape until the new one is painted */
+    }
+
+    private static final java.util.Set<java.util.UUID> remotePending = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static NativeImage remoteImage(Sync.RemoteCape c) {
         Img im = c.img() == null ? null : new Img(c.img(), c.w(), c.h());
         int[] pal = c.pal() != null ? c.pal() : new int[] {Theme.accent, Theme.selection, Theme.bg, Theme.fgBright, Theme.warn};
         int[] px = im == null ? Native.cape(c.id(), S, pal, null, 0, 0) : Native.cape(c.id(), S, pal, im.px, im.w, im.h);
-        if (px == null)
+        return px == null ? null : toImage(px, 64 * S, 32 * S);
+    }
+
+    private static Identifier remoteLoc(java.util.UUID u) {
+        return Identifier.fromNamespaceAndPath("tuxmc", "capes/p/" + u.toString().replace("-", ""));
+    }
+
+    private static ClientAsset.Texture uploadRemote(java.util.UUID u, NativeImage img) {
+        if (img == null)
             return null;
-        int w = 64 * S, h = 32 * S;
-        NativeImage img = new NativeImage(w, h, true);
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                img.setPixel(x, y, px[y * w + x]);
-        Identifier loc = Identifier.fromNamespaceAndPath("tuxmc", "capes/p/" + u.toString().replace("-", ""));
+        Identifier loc = remoteLoc(u);
         Minecraft.getInstance().getTextureManager().register(loc, new DynamicTexture(() -> "tuxmc cape of " + u, img));
-        ClientAsset.Texture t = new ClientAsset.ResourceTexture(loc, loc);
-        remote.put(u, new Made(c.at(), t));
-        return t;
+        return new ClientAsset.ResourceTexture(loc, loc);
+    }
+
+    private static int pruneTicks;
+
+    /** Config.perfMemory: once a minute, free the cape textures of players not drawn for 5 minutes
+     *  (a long session on a busy server would otherwise keep one per tux-mc player ever met) */
+    public static void tick(Minecraft mc) {
+        if (++pruneTicks % 1200 != 0 || !Config.perfOn() || !Config.perfMemory)
+            return;
+        long old = System.currentTimeMillis() - 5 * 60_000;
+        var it = remote.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            if (e.getValue().used < old) {
+                if (e.getValue().tex != null)
+                    mc.getTextureManager().release(remoteLoc(e.getKey()));
+                it.remove();
+            }
+        }
     }
 
     /** the outside face as (10*k)x(16*k) ARGB, for menu previews */

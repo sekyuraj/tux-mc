@@ -367,6 +367,86 @@ int mc_sys_ram_gb(void)
 #endif
 }
 
+/* default heap for this machine (MB): a quarter of the RAM, 3 to 8 GB, never over half.
+ * The mod stack with Sodium sits around 1.5-3 GB at normal render distances; ZGC
+ * wants room on top of that, but more than 8 GB only helps huge render distances. */
+int mc_sys_default_heap_mb(void)
+{
+    int ram = mc_sys_ram_gb() * 1024;
+    int mb = CLAMP(ram / 4, 3072, 8192);
+    return MIN(mb, MAX(1024, ram / 2));
+}
+
+#ifndef _WIN32
+static char *sysfs(const char *dev, const char *file)
+{
+    char *p = g_build_filename(dev, file, NULL), *txt = NULL;
+    g_file_get_contents(p, &txt, NULL, NULL);
+    g_free(p);
+    return txt ? g_strstrip(txt) : NULL;
+}
+
+static char *driver_of(const char *dev)
+{
+    char *p = g_build_filename(dev, "driver", NULL);
+    char *l = g_file_read_link(p, NULL);
+    g_free(p);
+    char *b = l ? g_path_get_basename(l) : NULL;
+    g_free(l);
+    return b;
+}
+#endif
+
+/* hybrid graphics (laptops): when the screen hangs off an integrated GPU and a second,
+ * dedicated one is there, the environment that makes the game render on the second.
+ * NULL = nothing to do (one GPU, or the dedicated one already drives the screen). */
+char *mc_sys_gpu_offload_env(void)
+{
+#ifdef _WIN32
+    return NULL;
+#else
+    GDir *d = g_dir_open("/sys/class/drm", 0, NULL);
+    char *prim_vendor = NULL, *other_vendor = NULL, *other_driver = NULL;
+    gint64 prim_vram = -1;
+    for (const char *e; d && (e = g_dir_read_name(d));) {
+        if (strncmp(e, "card", 4) || strchr(e, '-'))
+            continue;
+        char *dev = g_build_filename("/sys/class/drm", e, "device", NULL);
+        char *vendor = sysfs(dev, "vendor"), *boot = sysfs(dev, "boot_vga");
+        if (vendor && boot && !strcmp(boot, "1") && !prim_vendor) {
+            prim_vendor = g_strdup(vendor);
+            char *v = sysfs(dev, "mem_info_vram_total");
+            prim_vram = v ? g_ascii_strtoll(v, NULL, 10) : -1;
+            g_free(v);
+        } else if (vendor && !other_vendor) {
+            other_vendor = g_strdup(vendor);
+            other_driver = driver_of(dev);
+        }
+        g_free(vendor);
+        g_free(boot);
+        g_free(dev);
+    }
+    if (d)
+        g_dir_close(d);
+    char *r = NULL;
+    /* integrated: Intel, or AMD with a small carve-out instead of real VRAM */
+    bool integrated = prim_vendor && (!strcmp(prim_vendor, "0x8086")
+                                      || (!strcmp(prim_vendor, "0x1002") && prim_vram >= 0
+                                          && prim_vram < 4LL * 1024 * 1024 * 1024));
+    if (integrated && other_vendor && other_driver) {
+        if (!strcmp(other_vendor, "0x10de") && !strcmp(other_driver, "nvidia"))
+            r = g_strdup("__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __VK_LAYER_NV_optimus=NVIDIA_only");
+        else if (!strcmp(other_driver, "amdgpu") || !strcmp(other_driver, "nouveau")
+                 || !strcmp(other_driver, "i915") || !strcmp(other_driver, "xe"))
+            r = g_strdup("DRI_PRIME=1");
+    }
+    g_free(prim_vendor);
+    g_free(other_vendor);
+    g_free(other_driver);
+    return r;
+#endif
+}
+
 /* ------------------------------------------------------------- launching -- */
 
 /* starts Prism with args (NULL-terminated); false + err when that failed */

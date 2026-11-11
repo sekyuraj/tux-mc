@@ -555,19 +555,60 @@ static cairo_surface_t *paint_tux_cape(app_t *a, const char *id, int s)
     return sf;
 }
 
+/* the chip previews: 14 capes, most of them a 1024 px logo to decode first (~60 ms in all),
+ * so they're painted on a worker thread and swapped in when done; the window shows meanwhile */
+static int preview_gen;
+
+typedef struct {
+    app_t *a;
+    int gen;
+} previews_t;
+
+static void paint_previews(GTask *t, gpointer src, gpointer data, GCancellable *c)
+{
+    (void)src;
+    (void)c;
+    previews_t *p = data;
+    cairo_surface_t **out = g_new0(cairo_surface_t *, NTUX);
+    for (int i = 0; i < NTUX; i++)
+        out[i] = paint_tux_cape(p->a, TUX_CAPES[i].id, 2);
+    g_task_return_pointer(t, out, NULL);
+}
+
+static void previews_done(GObject *src, GAsyncResult *res, gpointer data)
+{
+    (void)src;
+    app_t *a = data;
+    cairo_surface_t **out = g_task_propagate_pointer(G_TASK(res), NULL);
+    bool current = ((previews_t *)g_task_get_task_data(G_TASK(res)))->gen == preview_gen;
+    for (int i = 0; out && i < NTUX; i++) {
+        if (!current) {                      /* a newer repaint is on its way */
+            if (out[i])
+                cairo_surface_destroy(out[i]);
+            continue;
+        }
+        if (tux_preview[i])
+            cairo_surface_destroy(tux_preview[i]);
+        tux_preview[i] = out[i];
+        if (a->tux_chips[i])
+            gtk_widget_queue_draw(a->tux_chips[i]);
+    }
+    g_free(out);
+}
+
 static void repaint_tux_capes(app_t *a)
 {
     if (a->tux_cape_tex)
         cairo_surface_destroy(a->tux_cape_tex);
     /* logo capes at 32x (2048x1024), like in game: thin lines stay sharp on the model */
     a->tux_cape_tex = a->tux_cape ? paint_tux_cape(a, a->tux_cape, tuxmc_cape_logo(a->tux_cape) ? 32 : 8) : NULL;
-    for (int i = 0; i < NTUX; i++) {
-        if (tux_preview[i])
-            cairo_surface_destroy(tux_preview[i]);
-        tux_preview[i] = paint_tux_cape(a, TUX_CAPES[i].id, 2);
-        if (a->tux_chips[i])
-            gtk_widget_queue_draw(a->tux_chips[i]);
-    }
+    GTask *t = g_task_new(NULL, NULL, previews_done, a);
+    previews_t *p = g_new(previews_t, 1);
+    p->a = a;
+    p->gen = ++preview_gen;
+    g_task_set_task_data(t, p, g_free);
+    g_task_run_in_thread(t, paint_previews);
+    g_object_unref(t);
 }
 
 void mc_home_refresh_capes(app_t *a)
@@ -1125,18 +1166,29 @@ static void on_start(GtkButton *b, gpointer data)
 
     struct stat st;
     a->log_seen = stat(a->log_path, &st) == 0 ? st.st_size : 0;
-    const char *args[] = {"--launch", a->instance, NULL};
-    GError *err = NULL;
-    if (!mc_sys_run_prism(args, &err)) {
-        launch_failed(a, err->message);
-        g_error_free(err);
-        return;
+    /* the game reads this to log how long the start took (config/tuxmc/startup.log) */
+    gint64 t0 = g_get_real_time() / 1000;
+    char t0s[32];
+    g_snprintf(t0s, sizeof t0s, "%" G_GINT64_FORMAT, t0);
+    g_setenv("TUXMC_T0", t0s, TRUE);
+    /* fast start: the launch Prism made last time, run directly (mc-fast.c) */
+    bool fast = mc_fast_launch(a, g_getenv("TUX_MC_WORLD"), g_getenv("TUX_MC_SERVER"), t0);
+    if (!fast) {
+        mc_fast_before_prism(a);
+        const char *w = g_getenv("TUX_MC_WORLD"), *sv = g_getenv("TUX_MC_SERVER");
+        const char *args[] = {"--launch", a->instance, w ? "--world" : sv ? "--server" : NULL, w ? w : sv, NULL};
+        GError *err = NULL;
+        if (!mc_sys_run_prism(args, &err)) {
+            launch_failed(a, err->message);
+            g_error_free(err);
+            return;
+        }
     }
     a->launching = true;
     a->progress = 0;
     a->progress_target = 0.1;
     gtk_widget_add_css_class(a->start, "busy");
-    set_start_label(a, "Logging in");
+    set_start_label(a, fast ? "Starting" : "Logging in");
     mc_status(a, "Starting Minecraft %s…", a->instance);
     a->view.wave = 1;
     a->watch_src = g_timeout_add(300, watch_log, a);
@@ -1431,6 +1483,18 @@ static void on_title_press(GtkGestureClick *g, int n, double x, double y, gpoint
 }
 #endif
 
+static gint64 proc_start_us(void);
+
+static gboolean build_packs_later(gpointer data)
+{
+    GtkWidget *box = data;
+    app_t *a = g_object_get_data(G_OBJECT(box), "app");
+    /* the window may have been rebuilt (instance switch) and this box dropped */
+    if (gtk_widget_get_parent(box) && !gtk_widget_get_first_child(box))
+        gtk_box_append(GTK_BOX(box), mc_page_packs(a));
+    return G_SOURCE_REMOVE;
+}
+
 static void build_window(app_t *a)
 {
     a->win = GTK_WINDOW(gtk_application_window_new(a->gapp));
@@ -1508,7 +1572,13 @@ static void build_window(app_t *a)
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_skins(a), "skins");
     mc_hat_load_worn(a);
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_hats(a), "hats");
-    gtk_stack_add_named(GTK_STACK(a->stack), mc_page_packs(a), "packs");
+    /* Packs reads the game jar's index (~20 ms): built right after the first frame instead */
+    GtkWidget *packs = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_hexpand(packs, TRUE);
+    gtk_widget_set_vexpand(packs, TRUE);
+    g_object_set_data(G_OBJECT(packs), "app", a);
+    g_idle_add_full(G_PRIORITY_LOW, build_packs_later, g_object_ref(packs), g_object_unref);
+    gtk_stack_add_named(GTK_STACK(a->stack), packs, "packs");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_mods(a), "mods");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_configs(a), "configs");
     gtk_stack_add_named(GTK_STACK(a->stack), mc_page_settings(a), "settings");
@@ -1685,6 +1755,59 @@ void mc_open_main(app_t *a)
     gtk_window_present(a->win);
 }
 
+/* test hooks: TUX_MC_PLAY=1 presses START; TUX_MC_TIME=1 prints the time to the
+ * first painted frame (ms since the process started) and quits */
+static gboolean play_later(gpointer data)
+{
+    on_start(NULL, data);
+    return G_SOURCE_REMOVE;
+}
+
+static gint64 proc_start_us(void)
+{
+    char *txt = NULL;
+    gint64 r = 0;
+    if (g_file_get_contents("/proc/self/stat", &txt, NULL, NULL)) {
+        char *p = strrchr(txt, ')');
+        /* field 22 (starttime, clock ticks since boot); p points at the end of field 2 */
+        for (int f = 2; p && f < 22; f++)
+            p = strchr(p + 1, ' ');
+        double up = 0;
+        char *u = NULL;
+        if (p && g_file_get_contents("/proc/uptime", &u, NULL, NULL)) {
+            up = g_ascii_strtod(u, NULL);
+            double started = g_ascii_strtod(p + 1, NULL) / sysconf(_SC_CLK_TCK);
+            r = g_get_real_time() - (gint64)((up - started) * G_USEC_PER_SEC);
+        }
+        g_free(u);
+        g_free(txt);
+    }
+    return r;
+}
+
+static void first_paint(GdkFrameClock *fc, gpointer data)
+{
+    app_t *a = data;
+    static gint64 t0;
+    if (!t0)
+        t0 = proc_start_us();
+    printf("tux-mc: first frame %.1f ms after start\n", (g_get_real_time() - t0) / 1000.0);
+    fflush(stdout);
+    g_signal_handlers_disconnect_by_func(fc, first_paint, data);
+    g_application_quit(G_APPLICATION(a->gapp));
+}
+
+static void test_hooks(app_t *a)
+{
+    if (g_getenv("TUX_MC_PLAY"))
+        g_timeout_add(500, play_later, a);
+    if (g_getenv("TUX_MC_TIME")) {
+        GtkWidget *w = GTK_WIDGET(a->win);
+        gtk_widget_realize(w);
+        g_signal_connect(gtk_widget_get_frame_clock(w), "after-paint", G_CALLBACK(first_paint), a);
+    }
+}
+
 static void on_activate(GApplication *app, gpointer data)
 {
     (void)app;
@@ -1700,6 +1823,7 @@ static void on_activate(GApplication *app, gpointer data)
     build_window(a);
     gtk_window_present(a->win);
     mc_update_startup(a);
+    test_hooks(a);
 }
 
 int main(int argc, char **argv)

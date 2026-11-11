@@ -131,6 +131,14 @@ void mc_sys_stop_prism(void);
 bool mc_sys_game_running(const char *instdir);
 int mc_sys_ram_gb(void);
 bool mc_sys_run_prism(const char *const *args, GError **err);
+/* fast start (mc-fast.c) */
+int mc_sys_default_heap_mb(void);
+char *mc_sys_gpu_offload_env(void);
+bool mc_fast_enabled(void);
+char *mc_fast_wrap_prefix(app_t *a);
+void mc_fast_before_prism(app_t *a);
+bool mc_fast_launch(app_t *a, const char *world, const char *server, gint64 t0);
+void mc_ini_set(GString *s, const char *key, const char *val);
 /* bring the game window of this instance to the front (after it started) */
 bool mc_sys_focus_game(const char *instdir);
 

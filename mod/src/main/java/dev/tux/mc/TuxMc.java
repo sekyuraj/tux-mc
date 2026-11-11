@@ -30,6 +30,7 @@ public class TuxMc implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        Perf.modInit();
         Config.load();
         var cat = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("tuxmc", "main"));
         zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.zoom", InputConstants.KEY_C, cat));
@@ -58,6 +59,8 @@ public class TuxMc implements ClientModInitializer {
                 (handler, client) -> DhCompat.connecting(client));
         net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.DISCONNECT.register(
                 (handler, client) -> DhCompat.disconnected());
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register(
+                (handler, sender, client) -> Perf.joined());
         ClientReceiveMessageEvents.GAME.register((msg, overlay) -> ServerTools.chat(msg));
         ClientReceiveMessageEvents.CHAT.register((msg, signed, sender, type, ts) -> ServerTools.chat(msg));
         LOG.info("tuxmc loaded");
@@ -183,6 +186,8 @@ public class TuxMc implements ClientModInitializer {
             Config.hud = !Config.hud;
             Config.save();
         }
+        Hud.tick(mc);
+        Capes.tick(mc);
         Emotes.tick(mc);
         ServerTools.tick(mc);
         Sync.tick(mc);

@@ -26,11 +26,54 @@ public final class Hud {
             waypoint(g, mc);
     }
 
+    /* the info box text, built once per client tick (Config.perfHud) instead of every frame:
+     * fps changes once a second and block coordinates once a tick, so nothing is lost */
+    private static final List<String> cLines = new ArrayList<>();
+    private static final List<Integer> cCols = new ArrayList<>();
+    private static int cWidth, totems;
+    private static boolean cached;
+    private static int ticks;
+
+    /** client tick: refresh the cached HUD text (every tick; every 4th under adaptive pressure) */
+    public static void tick(Minecraft mc) {
+        if (!Config.perfOn() || !Config.perfHud || mc.player == null) {
+            cached = false;
+            return;
+        }
+        if (Perf.pressure && ++ticks % 4 != 0 && cached)
+            return;
+        cLines.clear();
+        cCols.clear();
+        build(mc, cLines, cCols);
+        int w = 0;
+        for (String l : cLines)
+            w = Math.max(w, mc.font.width(l));
+        cWidth = w;
+        totems = countTotems(mc);
+        cached = true;
+    }
+
     private static void info(GuiGraphicsExtractor g, Minecraft mc) {
-        var p = mc.player;
         var f = mc.font;
-        List<String> lines = new ArrayList<>();
-        List<Integer> cols = new ArrayList<>();
+        List<String> lines;
+        List<Integer> cols;
+        int w = 0;
+        if (cached) {
+            lines = cLines;
+            cols = cCols;
+            w = cWidth;
+        } else {
+            lines = new ArrayList<>();
+            cols = new ArrayList<>();
+            build(mc, lines, cols);
+            for (String l : lines)
+                w = Math.max(w, f.width(l));
+        }
+        draw(g, f, lines, cols, w);
+    }
+
+    private static void build(Minecraft mc, List<String> lines, List<Integer> cols) {
+        var p = mc.player;
         StringBuilder sb = new StringBuilder();
         sb.append(mc.getFps()).append(" fps");
         int ping = TuxMc.ping();
@@ -64,9 +107,12 @@ public final class Hud {
             lines.add(ServerTools.nearCount() + " player" + (ServerTools.nearCount() == 1 ? "" : "s") + " near");
             cols.add(Theme.urgent);
         }
-        int w = 0;
-        for (String l : lines)
-            w = Math.max(w, f.width(l));
+        if (Config.perfDiagnostics)
+            Perf.diagnostics(lines, cols);
+    }
+
+    private static void draw(GuiGraphicsExtractor g, net.minecraft.client.gui.Font f, List<String> lines,
+            List<Integer> cols, int w) {
         w += 12;
         int h = lines.size() * 10 + 5;
         float sc = Math.max(0.5f, Math.min(2, Config.hudScale));
@@ -100,8 +146,7 @@ public final class Hud {
     private static void armor(GuiGraphicsExtractor g, Minecraft mc) {
         var p = mc.player;
         int x = g.guiWidth() / 2 + 98, y = g.guiHeight() - 20;
-        EquipmentSlot[] slots = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
-        for (EquipmentSlot s : slots) {
+        for (EquipmentSlot s : SLOTS) {
             ItemStack st = p.getItemBySlot(s);
             if (st.isEmpty())
                 continue;
@@ -114,6 +159,20 @@ public final class Hud {
             }
             x += 18;
         }
+        int totems = cached ? Hud.totems : countTotems(mc);
+        if (totems > 0) {
+            if (totem == null)
+                totem = new ItemStack(Items.TOTEM_OF_UNDYING);
+            g.item(totem, x + 2, y);
+            g.text(mc.font, "" + totems, x + 18, y + 5, totems < 2 ? Theme.urgent : Theme.fgBright, true);
+        }
+    }
+
+    private static ItemStack totem;              /* made on first use: items aren't bound when Hud loads */
+    private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+
+    private static int countTotems(Minecraft mc) {
+        var p = mc.player;
         int totems = 0;
         var inv = p.getInventory();
         for (int i = 0; i < inv.getContainerSize(); i++)
@@ -122,10 +181,7 @@ public final class Hud {
         if (p.getItemBySlot(EquipmentSlot.OFFHAND).getItem() == Items.TOTEM_OF_UNDYING
                 && inv.getContainerSize() <= 36)
             totems += p.getItemBySlot(EquipmentSlot.OFFHAND).getCount();
-        if (totems > 0) {
-            g.item(new ItemStack(Items.TOTEM_OF_UNDYING), x + 2, y);
-            g.text(mc.font, "" + totems, x + 18, y + 5, totems < 2 ? Theme.urgent : Theme.fgBright, true);
-        }
+        return totems;
     }
 
     /* tracked waypoint: name, distance, an arrow that turns with you */
