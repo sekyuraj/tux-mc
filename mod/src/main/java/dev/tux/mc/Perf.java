@@ -277,6 +277,7 @@ public final class Perf {
             sb.append("vsync ").append(mc.options.enableVsync().get()).append('\n');
             sb.append("window ").append(mc.getWindow().getWidth()).append('x').append(mc.getWindow().getHeight()).append('\n');
             sb.append("tuxmc_perf ").append(Config.perfOn()).append('\n');
+            sb.append("threads_niced ").append(ThreadTuner.counts).append('\n');
             sb.append("entity_cull_tested ").append(EntityCull.tested).append(" culled ").append(EntityCull.culled).append('\n');
             if (mc.level != null) {
                 java.util.Map<String, Integer> types = new java.util.HashMap<>();

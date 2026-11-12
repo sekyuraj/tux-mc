@@ -628,6 +628,10 @@ public class TuxScreen extends Screen {
             toggle(g, x, y0, w, mx, my, al, dt, "Capes in the background",
                     "painted off the render thread: no hitch when one shows up", Config.perfCosmetics,
                     () -> Config.perfCosmetics = !Config.perfCosmetics);
+            if (dev.tux.mc.Native.LINUX)
+                toggle(g, x, y0, w, mx, my, al, dt, "Background threads give way",
+                        "world gen, LOD and meshing threads yield to the frame (counts from the next start)",
+                        Config.perfThreads, () -> Config.perfThreads = !Config.perfThreads);
             toggle(g, x, y0, w, mx, my, al, dt, "Free unused capes", "textures of players gone for 5 minutes",
                     Config.perfMemory, () -> Config.perfMemory = !Config.perfMemory);
             toggle(g, x, y0, w, mx, my, al, dt, "Adaptive", "when fps drop, far players' emotes and hats pause",

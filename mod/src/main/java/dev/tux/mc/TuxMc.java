@@ -32,6 +32,7 @@ public class TuxMc implements ClientModInitializer {
     public void onInitializeClient() {
         Perf.modInit();
         Config.load();
+        ThreadTuner.start();
         var cat = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("tuxmc", "main"));
         zoomKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.tuxmc.zoom", InputConstants.KEY_C, cat));
         scrollZoomKey = KeyMappingHelper.registerKeyMapping(
