@@ -590,8 +590,10 @@ static void previews_done(GObject *src, GAsyncResult *res, gpointer data)
         if (tux_preview[i])
             cairo_surface_destroy(tux_preview[i]);
         tux_preview[i] = out[i];
-        if (a->tux_chips[i])
-            gtk_widget_queue_draw(a->tux_chips[i]);
+        /* the swatch inside the chip: GTK4 keeps a child's drawing until the child itself is queued */
+        GtkWidget *sw = a->tux_chips[i] ? g_object_get_data(G_OBJECT(a->tux_chips[i]), "swatch") : NULL;
+        if (sw)
+            gtk_widget_queue_draw(sw);
     }
     g_free(out);
 }
@@ -1024,6 +1026,7 @@ static void fill_cape_chips(app_t *a)
         gtk_box_append(GTK_BOX(box), mc_label(TUX_CAPES[i].name, NULL));
         gtk_button_set_child(GTK_BUTTON(b), box);
         g_object_set_data(G_OBJECT(b), "idx", GINT_TO_POINTER(i));
+        g_object_set_data(G_OBJECT(b), "swatch", sw);
         g_signal_connect(b, "clicked", G_CALLBACK(on_tux_chip), a);
         a->tux_chips[i] = b;
         gtk_flow_box_append(GTK_FLOW_BOX(a->cape_flow), b);
@@ -1765,8 +1768,14 @@ static gboolean play_later(gpointer data)
 
 static gint64 proc_start_us(void)
 {
-    char *txt = NULL;
     gint64 r = 0;
+#ifdef _WIN32
+    static gint64 first;                     /* no /proc: time from the first call instead */
+    if (!first)
+        first = g_get_real_time();
+    r = first;
+#else
+    char *txt = NULL;
     if (g_file_get_contents("/proc/self/stat", &txt, NULL, NULL)) {
         char *p = strrchr(txt, ')');
         /* field 22 (starttime, clock ticks since boot); p points at the end of field 2 */
@@ -1782,6 +1791,7 @@ static gint64 proc_start_us(void)
         g_free(u);
         g_free(txt);
     }
+#endif
     return r;
 }
 
