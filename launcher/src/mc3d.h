@@ -24,7 +24,8 @@ typedef struct {
     bool idle_turn;                      /* slow showcase turn when left alone */
     bool still;                          /* no breathing / swaying */
     const unsigned int *hat;             /* head model, ARGB cells (see mc-hat.c), may be NULL */
-    int hat_n;
+    const unsigned int *hat_sides;       /* NULL or 6 per cell: a side's own colour, 0 = the cell's */
+    int hat_n, hat_h;                    /* cells a side, cells tall */
 } mc3d_t;
 
 void mc3d_init(mc3d_t *v);

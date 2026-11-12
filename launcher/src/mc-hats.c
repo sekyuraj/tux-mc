@@ -19,13 +19,20 @@
 #define SHARE_MAX 45000                  /* bytes; the mod sends it as base64, 60k at most */
 #define UNDO_MAX 60
 
-enum { T_ADD, T_PAINT, T_ERASE, T_PICK, T_FILL, T_N };
-static const struct { const char *label, *tip; char key; } TOOLS[T_N] = {
-    {"Add", "Put a cell on the face you click (A)", 'a'},
-    {"Paint", "Recolour cells (P)", 'p'},
-    {"Erase", "Remove cells, also the right button (E)", 'e'},
-    {"Pick", "Take a cell's colour (I)", 'i'},
-    {"Fill", "Recolour all touching cells of the same colour (F)", 'f'},
+enum { T_ADD, T_PAINT, T_SIDE, T_ERASE, T_PICK, T_FILL, T_N };
+static const struct { const char *label, *tip, *how; char key; } TOOLS[T_N] = {
+    {"Add  A", "Put a cell on the face you click (A)",
+     "Add: click a face and a new cell sticks onto it. Hold and drag to build a row.", 'a'},
+    {"Paint  P", "Recolour whole cells, all their sides (P)",
+     "Paint: click cells to give them the colour, every side of them.", 'p'},
+    {"One side  S", "Paint just the side you click, not the whole cell (S)",
+     "One side: click a side to paint only that side. Good for faces, stripes and outlines.", 's'},
+    {"Erase  E", "Remove cells, also the right button (E)",
+     "Erase: click cells to take them away. The right button erases with any tool.", 'e'},
+    {"Pick  I", "Take the colour you click (I)",
+     "Pick: click anything to take its colour, then you're back to painting.", 'i'},
+    {"Fill  F", "Recolour all touching cells of the same colour (F)",
+     "Fill: click a cell and every touching cell of the same colour gets the new one.", 'f'},
 };
 
 static const guint32 SWATCHES[] = {
@@ -73,16 +80,19 @@ static struct {
     guint8 *stroke;                      /* cells added in this stroke */
 
     GtkWidget *area, *mine, *starts, *name, *info, *msg, *tool_btn[T_N], *colour_btn, *used, *wear, *detail,
-        *mirror_chk, *head_chk;
+        *mirror_chk, *head_chk, *height, *how;
 } H;
 
 /* ----------------------------------------------------------- rendering -- */
 
 #define EYE 70.0f
 
+/* skin pixels the grid reaches above its bottom (16 per grid of height) */
+static float hat_px(void) { return H.hat.n ? 16.0f * H.hat.h / H.hat.n : 16; }
+
 static p3 to_view(float x, float y, float z, double yaw, double pitch)
 {
-    y -= 30;                             /* the grid's middle: y 22..38 */
+    y -= 22 + hat_px() / 2;              /* the grid's middle: y 22..22+height */
     float c = cosf(yaw), s = sinf(yaw), t;
     t = x * c + z * s; z = -x * s + z * c; x = t;
     c = cosf(pitch); s = sinf(pitch);
@@ -153,7 +163,7 @@ static void add_quad(GArray *out, const mc_hat_t *h, int x, int y, int z, int di
 static bool filled(const mc_hat_t *h, bool head, int x, int y, int z)
 {
     int n = h->n;
-    if (x < 0 || y < 0 || z < 0 || x >= n || y >= n || z >= n)
+    if (x < 0 || y < 0 || z < 0 || x >= n || y >= h->h || z >= n)
         return false;
     return h->c[(y * n + z) * n + x] || (head && mc_hat_is_head(n, x, y, z));
 }
@@ -162,16 +172,18 @@ static void build_faces(GArray *out, const mc_hat_t *h, bool head, double yaw, d
 {
     g_array_set_size(out, 0);
     int n = h->n;
-    for (int y = 0; y < n; y++)
+    for (int y = 0; y < h->h; y++)
         for (int z = 0; z < n; z++)
             for (int x = 0; x < n; x++) {
-                guint32 c = h->c[(y * n + z) * n + x];
+                int i = (y * n + z) * n + x;
+                guint32 c = h->c[i];
                 bool hd = !c && head && mc_hat_is_head(n, x, y, z);
                 if (!c && !hd)
                     continue;
                 for (int d = 0; d < 6; d++)
                     if (!filled(h, head, x + DX[d], y + DY[d], z + DZ[d]))
-                        add_quad(out, h, x, y, z, d, hd ? head_colour(n, x, y, z, d) : c, hd, yaw, pitch);
+                        add_quad(out, h, x, y, z, d, hd ? head_colour(n, x, y, z, d) : mc_hat_side(h, i, d), hd, yaw,
+                                 pitch);
             }
 }
 
@@ -266,7 +278,7 @@ static cairo_surface_t *thumb(const mc_hat_t *h, int size)
     build_faces(f, h, true, -0.6, 0.35);
     rbuf_t b = {0};
     rb_size(&b, size, size);
-    raster(&b, f, size / 26.0, -1);
+    raster(&b, f, size / (26.0 + hat_px() - 16), -1);
     H.hat = keep;
     cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, size, size);
     memcpy(cairo_image_surface_get_data(s), b.px, sizeof(guint32) * size * size);
@@ -278,6 +290,9 @@ static cairo_surface_t *thumb(const mc_hat_t *h, int size)
     return s;
 }
 
+/* pixels per skin pixel: the whole grid fits at zoom 1, however tall */
+static double view_scale(int rw, int rh) { return fmin(rw / 21.0, rh / (5.0 + hat_px())) * H.zoom; }
+
 static void draw(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
 {
     (void)da;
@@ -288,7 +303,7 @@ static void draw(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
     int rw = w * sc, rh = h * sc;
     build_faces(H.faces, &H.hat, H.show_head, H.yaw, H.pitch);
     rb_size(&H.rb, rw, rh);
-    raster(&H.rb, H.faces, fmin(rw, rh) / 21.0 * H.zoom, H.hover);
+    raster(&H.rb, H.faces, view_scale(rw, rh), H.hover);
     /* the grid's floor, faint, so empty space has a shape */
     GdkRGBA dim;
     mc_pal(H.a, PAL_DIM, &dim);
@@ -296,7 +311,7 @@ static void draw(GtkDrawingArea *da, cairo_t *cr, int w, int h, gpointer data)
     cairo_scale(cr, 1.0 / sc, 1.0 / sc);
     cairo_set_source_rgba(cr, dim.red, dim.green, dim.blue, 0.35);
     cairo_set_line_width(cr, sc);
-    double s = fmin(rw, rh) / 21.0 * H.zoom;
+    double s = view_scale(rw, rh);
     for (int i = 0; i <= 16; i += 2) {
         for (int k = 0; k < 2; k++) {
             float ax = k ? -8 : -8 + i, az = k ? -8 + i : -8, bx = k ? 8 : -8 + i, bz = k ? -8 + i : 8;
@@ -364,9 +379,29 @@ static void set_cell(int cell, guint32 c)
     int n = H.hat.n, x = cell % n, z = cell / n % n, y = cell / (n * n);
     if (mc_hat_is_head(n, x, y, z))
         return;
+    int m = (y * n + z) * n + (n - 1 - x);
     H.hat.c[cell] = c;
-    if (H.mirror)
-        H.hat.c[(y * n + z) * n + (n - 1 - x)] = c;
+    if (H.hat.f)                         /* a whole-cell colour (or erase) covers its painted sides */
+        memset(H.hat.f + cell * 6, 0, 6 * sizeof(guint32));
+    if (H.mirror) {
+        H.hat.c[m] = c;
+        if (H.hat.f)
+            memset(H.hat.f + m * 6, 0, 6 * sizeof(guint32));
+    }
+}
+
+/* one side of a cell; the mirror paints the matching side (left and right swap) */
+static bool set_side(int cell, int dir, guint32 c)
+{
+    int n = H.hat.n, x = cell % n, z = cell / n % n, y = cell / (n * n);
+    if (!H.hat.c[cell] || mc_hat_side(&H.hat, cell, dir) == c)
+        return false;
+    guint32 *f = mc_hat_sides(&H.hat);
+    f[cell * 6 + dir] = c;
+    int m = (y * n + z) * n + (n - 1 - x), md = dir == 2 ? 3 : dir == 3 ? 2 : dir;
+    if (H.mirror && H.hat.c[m])
+        f[m * 6 + md] = c;
+    return true;
 }
 
 static void flood(int start, guint32 from, guint32 to)
@@ -382,10 +417,12 @@ static void flood(int start, guint32 from, guint32 to)
         if (H.hat.c[c] != from)
             continue;
         H.hat.c[c] = to;
+        if (H.hat.f)
+            memset(H.hat.f + c * 6, 0, 6 * sizeof(guint32));
         int x = c % n, z = c / n % n, y = c / (n * n);
         for (int d = 0; d < 6; d++) {
             int X = x + DX[d], Y = y + DY[d], Z = z + DZ[d];
-            if (X >= 0 && Y >= 0 && Z >= 0 && X < n && Y < n && Z < n) {
+            if (X >= 0 && Y >= 0 && Z >= 0 && X < n && Y < H.hat.h && Z < n) {
                 int k = (Y * n + Z) * n + X;
                 g_array_append_val(st, k);
             }
@@ -404,6 +441,8 @@ static void set_colour(guint32 rgb)
 static void set_tool(int t)
 {
     H.tool = t;
+    if (H.how)
+        gtk_label_set_text(GTK_LABEL(H.how), TOOLS[t].how);
     for (int i = 0; i < T_N; i++)
         if (i == t)
             gtk_widget_add_css_class(H.tool_btn[i], "active");
@@ -423,7 +462,7 @@ static bool apply(int f, int tool, bool first)
         if (H.stroke[hf->cell] && !first)
             return false;                /* don't stack a stroke onto itself */
         int X = x + DX[hf->dir], Y = y + DY[hf->dir], Z = z + DZ[hf->dir];
-        if (X < 0 || Y < 0 || Z < 0 || X >= n || Y >= n || Z >= n || filled(&H.hat, true, X, Y, Z))
+        if (X < 0 || Y < 0 || Z < 0 || X >= n || Y >= H.hat.h || Z >= n || filled(&H.hat, true, X, Y, Z))
             return false;
         int k = (Y * n + Z) * n + X;
         set_cell(k, H.colour);
@@ -437,6 +476,8 @@ static bool apply(int f, int tool, bool first)
             return false;
         set_cell(hf->cell, H.colour);
         return true;
+    case T_SIDE:
+        return !hf->head && set_side(hf->cell, hf->dir, H.colour);
     case T_ERASE:
         if (hf->head)
             return false;
@@ -478,7 +519,7 @@ static void on_press(GtkGestureDrag *g, double x, double y, gpointer data)
     H.rotating = H.button != 1 || f < 0;
     if (H.rotating)
         return;
-    memset(H.stroke, 0, H.hat.n * H.hat.n * H.hat.n);
+    memset(H.stroke, 0, mc_hat_cells(&H.hat));
     push_undo();
     if (apply(f, H.tool, true))
         changed();
@@ -552,13 +593,19 @@ static void on_leave(GtkEventControllerMotion *m, gpointer data)
     gtk_widget_queue_draw(H.area);
 }
 
+/* zoom 0.2 (whole thing small) .. 6 (one cell big) */
+static void zoom_by(double k)
+{
+    H.zoom = CLAMP(H.zoom * k, 0.2, 6);
+    gtk_widget_queue_draw(H.area);
+}
+
 static gboolean on_scroll(GtkEventControllerScroll *s, double dx, double dy, gpointer data)
 {
     (void)s;
     (void)dx;
     (void)data;
-    H.zoom = CLAMP(H.zoom * (dy > 0 ? 0.9 : 1.11), 0.5, 4);
-    gtk_widget_queue_draw(H.area);
+    zoom_by(pow(1.12, -CLAMP(dy, -4, 4)));
     return TRUE;
 }
 
@@ -587,6 +634,18 @@ static gboolean on_key(GtkEventControllerKey *k, guint key, guint code, GdkModif
         }
     if (key == GDK_KEY_m) {
         gtk_check_button_set_active(GTK_CHECK_BUTTON(H.mirror_chk), !H.mirror);
+        return TRUE;
+    }
+    if (key == GDK_KEY_s) {
+        set_tool(T_SIDE);
+        return TRUE;
+    }
+    if (key == GDK_KEY_plus || key == GDK_KEY_equal || key == GDK_KEY_KP_Add) {
+        zoom_by(1.25);
+        return TRUE;
+    }
+    if (key == GDK_KEY_minus || key == GDK_KEY_KP_Subtract) {
+        zoom_by(0.8);
         return TRUE;
     }
     return FALSE;
@@ -660,9 +719,9 @@ static void fill_used(void)
 {
     gtk_flow_box_remove_all(GTK_FLOW_BOX(H.used));
     GHashTable *cnt = g_hash_table_new(NULL, NULL);
-    for (int i = 0; i < H.hat.n * H.hat.n * H.hat.n; i++)
-        if (H.hat.c[i]) {
-            gpointer k = GUINT_TO_POINTER(H.hat.c[i] & 0xFFFFFF);
+    for (int i = 0; i < mc_hat_cells(&H.hat); i++)
+        for (int d = 0; H.hat.c[i] && d < (H.hat.f ? 6 : 1); d++) {    /* painted sides count too */
+            gpointer k = GUINT_TO_POINTER(mc_hat_side(&H.hat, i, d) & 0xFFFFFF);
             g_hash_table_insert(cnt, k, GINT_TO_POINTER(GPOINTER_TO_INT(g_hash_table_lookup(cnt, k)) + 1));
         }
     for (int shown = 0; shown < 16 && g_hash_table_size(cnt); shown++) {
@@ -701,9 +760,10 @@ static void edit(mc_hat_t *h, const char *path)
     g_ptr_array_set_size(H.undo, 0);
     g_ptr_array_set_size(H.redo, 0);
     g_free(H.stroke);
-    H.stroke = g_malloc0(H.hat.n * H.hat.n * H.hat.n);
+    H.stroke = g_malloc0(mc_hat_cells(&H.hat));
     gtk_editable_set_text(GTK_EDITABLE(H.name), H.hat.name);
     gtk_drop_down_set_selected(GTK_DROP_DOWN(H.detail), H.hat.n == 32);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(H.height), H.hat.h / H.hat.n - 1);
     H.hover = -1;
     update_info();
     fill_used();
@@ -726,7 +786,9 @@ void mc_hat_load_worn(app_t *a)
     }
     g_free(id);
     a->view.hat = a->hat.n ? a->hat.c : NULL;
+    a->view.hat_sides = a->hat.n ? a->hat.f : NULL;
     a->view.hat_n = a->hat.n;
+    a->view.hat_h = a->hat.h;
 }
 
 static char *save_current(void)
@@ -807,7 +869,9 @@ static void on_clear(GtkButton *b, gpointer d)
     (void)b;
     (void)d;
     push_undo();
-    memset(H.hat.c, 0, sizeof(guint32) * H.hat.n * H.hat.n * H.hat.n);
+    memset(H.hat.c, 0, sizeof(guint32) * mc_hat_cells(&H.hat));
+    g_free(H.hat.f);
+    H.hat.f = NULL;
     changed();
 }
 
@@ -831,8 +895,43 @@ static void on_detail(GObject *dd, GParamSpec *ps, gpointer d)
     push_undo();
     mc_hat_resize(&H.hat, n);
     g_free(H.stroke);
-    H.stroke = g_malloc0(n * n * n);
+    H.stroke = g_malloc0(mc_hat_cells(&H.hat));
     changed();
+}
+
+static void on_height(GObject *dd, GParamSpec *ps, gpointer d)
+{
+    (void)ps;
+    (void)d;
+    int hh = H.hat.n * (int)(gtk_drop_down_get_selected(GTK_DROP_DOWN(dd)) + 1);
+    if (!H.hat.n || hh == H.hat.h)
+        return;
+    int lost = 0;                        /* cells a lower height would cut off */
+    for (int i = H.hat.n * H.hat.n * MIN(hh, H.hat.h); i < mc_hat_cells(&H.hat); i++)
+        lost += H.hat.c[i] != 0;
+    push_undo();
+    mc_hat_set_height(&H.hat, hh);
+    g_free(H.stroke);
+    H.stroke = g_malloc0(mc_hat_cells(&H.hat));
+    changed();
+    if (lost)
+        msg("The top was cut off. Undo (Ctrl+Z) brings it back.");
+    gtk_widget_queue_draw(H.area);
+}
+
+/* views: a turn for each, zoom back to fit */
+static void on_view(GtkButton *b, gpointer d)
+{
+    (void)b;
+    switch (GPOINTER_TO_INT(d)) {
+    case 0: H.yaw = 0; H.pitch = 0.05; break;            /* front */
+    case 1: H.yaw = -M_PI / 2; H.pitch = 0.05; break;    /* side */
+    case 2: H.yaw = 0; H.pitch = 1.3; break;             /* top */
+    case 3: reset_view(); break;                         /* fit */
+    case 4: zoom_by(1.25); return;
+    case 5: zoom_by(0.8); return;
+    }
+    gtk_widget_queue_draw(H.area);
 }
 
 /* move everything one cell */
@@ -852,17 +951,25 @@ static void on_move(GtkButton *b, gpointer d)
         }
     }
     push_undo();
-    guint32 *o = g_memdup2(H.hat.c, sizeof(guint32) * n * n * n);
-    memset(H.hat.c, 0, sizeof(guint32) * n * n * n);
-    for (int y = 0; y < n; y++)
+    int hh = H.hat.h, cells = mc_hat_cells(&H.hat);
+    guint32 *o = g_memdup2(H.hat.c, sizeof(guint32) * cells);
+    guint32 *of = H.hat.f;                /* sides move with their cells */
+    H.hat.f = NULL;
+    memset(H.hat.c, 0, sizeof(guint32) * cells);
+    for (int y = 0; y < hh; y++)
         for (int z = 0; z < n; z++)
             for (int x = 0; x < n; x++) {
-                int X = x + dx, Y = y + dy, Z = z + dz;
-                guint32 c = o[(y * n + z) * n + x];
-                if (c && X >= 0 && Y >= 0 && Z >= 0 && X < n && Y < n && Z < n && !mc_hat_is_head(n, X, Y, Z))
-                    H.hat.c[(Y * n + Z) * n + X] = c;
+                int X = x + dx, Y = y + dy, Z = z + dz, i = (y * n + z) * n + x;
+                guint32 c = o[i];
+                if (c && X >= 0 && Y >= 0 && Z >= 0 && X < n && Y < hh && Z < n && !mc_hat_is_head(n, X, Y, Z)) {
+                    int k = (Y * n + Z) * n + X;
+                    H.hat.c[k] = c;
+                    if (of)
+                        memcpy(mc_hat_sides(&H.hat) + k * 6, of + i * 6, 6 * sizeof(guint32));
+                }
             }
     g_free(o);
+    g_free(of);
     changed();
 }
 
@@ -1133,6 +1240,10 @@ GtkWidget *mc_page_hats(app_t *a)
     gtk_box_append(GTK_BOX(tools), small_button("↶", "Undo (Ctrl+Z)", G_CALLBACK(on_undo), NULL));
     gtk_box_append(GTK_BOX(tools), small_button("↷", "Redo (Ctrl+Y)", G_CALLBACK(on_redo), NULL));
     gtk_box_append(GTK_BOX(mid), tools);
+    H.how = mc_label("", "dim");
+    gtk_label_set_xalign(GTK_LABEL(H.how), 0);
+    gtk_label_set_wrap(GTK_LABEL(H.how), TRUE);
+    gtk_box_append(GTK_BOX(mid), H.how);
 
     GtkWidget *frame = gtk_overlay_new();
     gtk_widget_add_css_class(frame, "mcl-glass");
@@ -1154,8 +1265,8 @@ GtkWidget *mc_page_hats(app_t *a)
     g_signal_connect(sc, "scroll", G_CALLBACK(on_scroll), NULL);
     gtk_widget_add_controller(H.area, sc);
     gtk_overlay_set_child(GTK_OVERLAY(frame), H.area);
-    GtkWidget *hint = mc_label("Click: use the tool.  Right click: erase.  Drag empty space: turn.  Scroll: zoom.",
-                               "dim");
+    GtkWidget *hint = mc_label("Right click: erase.  Drag empty space or with the right button: turn.  "
+                               "Scroll or + and −: zoom.", "dim");
     gtk_widget_set_halign(hint, GTK_ALIGN_CENTER);
     gtk_widget_set_valign(hint, GTK_ALIGN_END);
     gtk_widget_set_margin_bottom(hint, 10);
@@ -1222,7 +1333,7 @@ GtkWidget *mc_page_hats(app_t *a)
     gtk_box_append(GTK_BOX(cc), H.used);
     gtk_box_append(GTK_BOX(right), cc);
 
-    GtkWidget *oc = mc_card("Options", NULL);
+    GtkWidget *oc = mc_card("Size and options", NULL);
     H.mirror_chk = gtk_check_button_new_with_label("Mirror left and right (M)");
     gtk_check_button_set_active(GTK_CHECK_BUTTON(H.mirror_chk), H.mirror);
     g_signal_connect(H.mirror_chk, "toggled", G_CALLBACK(on_mirror), NULL);
@@ -1239,7 +1350,32 @@ GtkWidget *mc_page_hats(app_t *a)
     g_signal_connect(H.detail, "notify::selected", G_CALLBACK(on_detail), NULL);
     gtk_box_append(GTK_BOX(dr), H.detail);
     gtk_box_append(GTK_BOX(oc), dr);
+    GtkWidget *hr = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_append(GTK_BOX(hr), mc_label("Height", NULL));
+    const char *const hts[] = {"Normal", "Tall (2x)", "Very tall (3x)", NULL};
+    H.height = gtk_drop_down_new_from_strings(hts);
+    gtk_widget_set_hexpand(H.height, TRUE);
+    gtk_widget_set_tooltip_text(H.height, "Room above your head: tall hats, ears, antennas");
+    g_signal_connect(H.height, "notify::selected", G_CALLBACK(on_height), NULL);
+    gtk_box_append(GTK_BOX(hr), H.height);
+    gtk_box_append(GTK_BOX(oc), hr);
     gtk_box_append(GTK_BOX(right), oc);
+
+    GtkWidget *vc = mc_card("View", NULL);
+    GtkWidget *vg = gtk_grid_new();
+    gtk_grid_set_column_spacing(GTK_GRID(vg), 4);
+    gtk_grid_set_row_spacing(GTK_GRID(vg), 4);
+    gtk_grid_set_column_homogeneous(GTK_GRID(vg), TRUE);
+    static const struct { const char *l, *tip; int what, c, r; } VW[] = {
+        {"Front", "look at the face", 0, 0, 0}, {"Side", "look from the left", 1, 1, 0},
+        {"Top", "look down on it", 2, 2, 0},    {"−", "zoom out (−)", 5, 0, 1},
+        {"Fit", "back to the whole hat", 3, 1, 1}, {"+", "zoom in (+)", 4, 2, 1},
+    };
+    for (size_t i = 0; i < G_N_ELEMENTS(VW); i++)
+        gtk_grid_attach(GTK_GRID(vg), small_button(VW[i].l, VW[i].tip, G_CALLBACK(on_view), GINT_TO_POINTER(VW[i].what)),
+                        VW[i].c, VW[i].r, 1, 1);
+    gtk_box_append(GTK_BOX(vc), vg);
+    gtk_box_append(GTK_BOX(right), vc);
 
     GtkWidget *mv = mc_card("Move it", "One cell at a time, as you see it now.");
     GtkWidget *grid = gtk_grid_new();
@@ -1277,6 +1413,8 @@ GtkWidget *mc_page_hats(app_t *a)
     for (int i = 0; test && i < mc_hat_presets(); i++)
         if (!strcmp(test, mc_hat_preset_name(i)))
             mc_hat_preset(&h, i);
+    if (!h.n && g_getenv("TUX_MC_HAT_FILE"))                     /* screenshots: a file */
+        mc_hat_load(g_getenv("TUX_MC_HAT_FILE"), &h);
     if (h.n)
         edit(&h, NULL);
     else if (p && mc_hat_load(p, &h))

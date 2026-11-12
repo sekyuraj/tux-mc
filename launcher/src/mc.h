@@ -14,7 +14,9 @@ typedef struct app app_t;
 /* a head model, see mc-hat.c */
 typedef struct {
     int n;                               /* 16 or 32 cells a side */
-    guint32 *c;                          /* n^3 ARGB, 0 = empty; index (y * n + z) * n + x */
+    int h;                               /* cells tall: n, 2n or 3n */
+    guint32 *c;                          /* n*n*h ARGB, 0 = empty; index (y * n + z) * n + x */
+    guint32 *f;                          /* NULL or 6 per cell: a side's own colour, 0 = the cell's */
     char name[64];
 } mc_hat_t;
 
@@ -222,6 +224,11 @@ void mc_colour_on_change(GtkWidget *w, void (*cb)(GtkWidget *w, gpointer data), 
 
 /* mc-hat.c */
 void mc_hat_new(mc_hat_t *h, int n);
+void mc_hat_new_tall(mc_hat_t *h, int n, int height);
+int mc_hat_cells(const mc_hat_t *h);
+guint32 *mc_hat_sides(mc_hat_t *h);
+guint32 mc_hat_side(const mc_hat_t *h, int i, int d);
+void mc_hat_set_height(mc_hat_t *h, int height);
 void mc_hat_free(mc_hat_t *h);
 void mc_hat_copy(mc_hat_t *to, const mc_hat_t *from);
 int mc_hat_count(const mc_hat_t *h);

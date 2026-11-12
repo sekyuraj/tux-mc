@@ -1,13 +1,21 @@
 /* mc-hat.c — head models ("hats"): the file format, the built-in starting
  * points and MagicaVoxel import.
  *
- * A hat is an N x N x N grid (N = 16 or 32) over a 16 x 16 x 16 skin-pixel
- * space around the head: x and z run -8..8 from the head's middle, y runs from
- * 2 pixels under the head's bottom to 6 above its top. The face is at high z.
- * The mod (Hats.java) reads the same file, so keep the two in step.
+ * A hat is an N x H x N grid (N = 16 or 32 cells a side, H = N, 2N or 3N
+ * tall) over a space of 16 skin pixels per N cells around the head: x and z
+ * run -8..8 from the head's middle, y runs from 2 pixels under the head's
+ * bottom upwards (6 above its top for H = N, 22 for 2N, 38 for 3N). The face
+ * is at high z. Each side of a cell can have its own colour ("one side").
+ * The mod (Hats.java) reads the same files, so keep the two in step.
  *
- * File: zlib of  "TUXHAT1\0", N, name length, name, colour count P (1..255),
- *       P * RGB, then N^3 bytes (0 = empty, k = colour k), x fastest, then z, then y.
+ * File: zlib of
+ *   "TUXHAT1\0", N, name length, name, colour count P (1..255), P * RGB,
+ *   N^3 bytes (0 = empty, k = colour k), x fastest, then z, then y
+ * or, for taller hats or hats with painted sides,
+ *   "TUXHAT2\0", N, M (height = M * N), name length, name, P, P * RGB,
+ *   N*N*M*N cell bytes, then a big-endian u32 count and that many
+ *   5-byte sides: cell (u24 BE), side (0 +z, 1 -z, 2 -x, 3 +x, 4 +y, 5 -y), colour k.
+ * Plain hats are still written as TUXHAT1, so older mods keep showing them.
  */
 #include "mc.h"
 
@@ -16,34 +24,58 @@
 #include <zlib.h>
 
 #define MAGIC "TUXHAT1"
+#define MAGIC2 "TUXHAT2"
+
+int mc_hat_cells(const mc_hat_t *h) { return h->n * h->n * h->h; }
 
 void mc_hat_free(mc_hat_t *h)
 {
     g_free(h->c);
+    g_free(h->f);
     h->c = NULL;
-    h->n = 0;
+    h->f = NULL;
+    h->n = h->h = 0;
 }
 
-void mc_hat_new(mc_hat_t *h, int n)
+void mc_hat_new_tall(mc_hat_t *h, int n, int height)
 {
     mc_hat_free(h);
     h->n = n;
-    h->c = g_new0(guint32, n * n * n);
+    h->h = CLAMP(height, n, 3 * n);
+    h->c = g_new0(guint32, mc_hat_cells(h));
+}
+
+void mc_hat_new(mc_hat_t *h, int n) { mc_hat_new_tall(h, n, n); }
+
+/* the per-side colours, made on first use */
+guint32 *mc_hat_sides(mc_hat_t *h)
+{
+    if (!h->f)
+        h->f = g_new0(guint32, (gsize)mc_hat_cells(h) * 6);
+    return h->f;
 }
 
 void mc_hat_copy(mc_hat_t *to, const mc_hat_t *from)
 {
-    mc_hat_new(to, from->n);
-    memcpy(to->c, from->c, sizeof(guint32) * from->n * from->n * from->n);
+    mc_hat_new_tall(to, from->n, from->h);
+    memcpy(to->c, from->c, sizeof(guint32) * mc_hat_cells(from));
+    if (from->f)
+        to->f = g_memdup2(from->f, sizeof(guint32) * mc_hat_cells(from) * 6);
     g_strlcpy(to->name, from->name, sizeof to->name);
 }
 
 int mc_hat_count(const mc_hat_t *h)
 {
     int k = 0;
-    for (int i = 0; i < h->n * h->n * h->n; i++)
+    for (int i = 0; i < mc_hat_cells(h); i++)
         k += h->c[i] != 0;
     return k;
+}
+
+/* the colour shown on side d of cell i */
+guint32 mc_hat_side(const mc_hat_t *h, int i, int d)
+{
+    return h->f && h->f[i * 6 + d] ? h->f[i * 6 + d] : h->c[i];
 }
 
 /* the head's cells in an n grid */
@@ -53,45 +85,64 @@ bool mc_hat_is_head(int n, int x, int y, int z)
     return x >= 4 * s && x < 12 * s && z >= 4 * s && z < 12 * s && y >= 2 * s && y < 10 * s;
 }
 
+/* the palette index of c, added if new; -1 when full */
+static int pal_add(guint32 *pal, int *np, guint32 c)
+{
+    for (int k = 0; k < *np; k++)
+        if (pal[k] == c)
+            return k;
+    if (*np == 255)
+        return -1;
+    pal[*np] = c;
+    return (*np)++;
+}
+
 GBytes *mc_hat_encode(const mc_hat_t *h)
 {
-    int n = h->n, nn = n * n * n;
+    int n = h->n, nn = mc_hat_cells(h);
+    /* sides that differ from their cell (on filled cells only) */
+    int ns = 0;
+    for (int i = 0; h->f && i < nn; i++)
+        for (int d = 0; d < 6; d++)
+            ns += h->c[i] && h->f[i * 6 + d] && (h->f[i * 6 + d] & 0xFFFFFF) != (h->c[i] & 0xFFFFFF);
+    bool v2 = h->h != n || ns > 0;
     /* at most 255 colours: drop low bits until it fits */
     guint32 pal[255];
     int np = 0;
     guint8 *idx = g_malloc(nn);
+    guint8 *sidx = ns ? g_malloc((gsize)nn * 6) : NULL;
     static const guint32 masks[] = {0xFFFFFF, 0xFEFEFE, 0xFCFCFC, 0xF8F8F8, 0xF0F0F0, 0xE0E0E0, 0xC0C0C0, 0x808080};
     for (size_t m = 0; m < G_N_ELEMENTS(masks); m++) {
         guint32 mask = masks[m];
         np = 0;
         bool full = false;
         for (int i = 0; i < nn && !full; i++) {
-            if (!h->c[i]) {
-                idx[i] = 0;
-                continue;
-            }
-            guint32 c = h->c[i] & mask;
-            int k = 0;
-            while (k < np && pal[k] != c)
-                k++;
-            if (k == np) {
-                if (np == 255) {
-                    full = true;
-                    break;
+            int k = h->c[i] ? pal_add(pal, &np, h->c[i] & mask) : -2;
+            full = k == -1;
+            idx[i] = k + 1 > 0 ? (guint8)(k + 1) : 0;
+            for (int d = 0; sidx && d < 6 && !full; d++) {
+                guint32 f = h->f[i * 6 + d];
+                if (!h->c[i] || !f || (f & 0xFFFFFF) == (h->c[i] & 0xFFFFFF)) {
+                    sidx[i * 6 + d] = 0;
+                    continue;
                 }
-                pal[np++] = c;
+                int j = pal_add(pal, &np, f & mask);
+                full = j == -1;
+                sidx[i * 6 + d] = (guint8)(j + 1);
             }
-            idx[i] = k + 1;
         }
         if (!full)
             break;
     }
     GByteArray *raw = g_byte_array_new();
-    g_byte_array_append(raw, (const guint8 *)MAGIC, 8);
+    g_byte_array_append(raw, (const guint8 *)(v2 ? MAGIC2 : MAGIC), 8);
     size_t nl = strlen(h->name);
-    guint8 hd[2] = {(guint8)n, (guint8)MIN(nl, 63)};
-    g_byte_array_append(raw, hd, 2);
-    g_byte_array_append(raw, (const guint8 *)h->name, hd[1]);
+    guint8 hd[3] = {(guint8)n, (guint8)(h->h / n), (guint8)MIN(nl, 63)};
+    if (v2)
+        g_byte_array_append(raw, hd, 3);
+    else
+        g_byte_array_append(raw, (guint8[]){hd[0], hd[2]}, 2);
+    g_byte_array_append(raw, (const guint8 *)h->name, hd[2]);
     guint8 pc = (guint8)MAX(np, 1);
     g_byte_array_append(raw, &pc, 1);
     for (int k = 0; k < pc; k++) {
@@ -100,7 +151,21 @@ GBytes *mc_hat_encode(const mc_hat_t *h)
         g_byte_array_append(raw, rgb, 3);
     }
     g_byte_array_append(raw, idx, nn);
+    if (v2) {
+        int cnt = 0;
+        for (int i = 0; sidx && i < nn * 6; i++)
+            cnt += sidx[i] != 0;
+        guint8 c4[4] = {cnt >> 24 & 255, cnt >> 16 & 255, cnt >> 8 & 255, cnt & 255};
+        g_byte_array_append(raw, c4, 4);
+        for (int i = 0; sidx && i < nn * 6; i++)
+            if (sidx[i]) {
+                int cell = i / 6;
+                guint8 e[5] = {cell >> 16 & 255, cell >> 8 & 255, cell & 255, (guint8)(i % 6), sidx[i]};
+                g_byte_array_append(raw, e, 5);
+            }
+    }
     g_free(idx);
+    g_free(sidx);
     uLongf zl = compressBound(raw->len);
     guint8 *z = g_malloc(zl);
     compress2(z, &zl, raw->data, raw->len, 9);
@@ -110,24 +175,42 @@ GBytes *mc_hat_encode(const mc_hat_t *h)
 
 bool mc_hat_decode(const guint8 *data, gsize len, mc_hat_t *h)
 {
-    uLongf rl = 8 + 2 + 64 + 1 + 255 * 3 + 32 * 32 * 32;
+    int maxc = 32 * 32 * 96;
+    uLongf rl = 8 + 3 + 64 + 1 + 255 * 3 + maxc + 4 + (uLongf)maxc * 6 * 5;
     guint8 *r = g_malloc(rl);
-    bool ok = uncompress(r, &rl, data, len) == Z_OK && rl > 11 && !memcmp(r, MAGIC, 8);
-    int n = ok ? r[8] : 0, nl = ok ? r[9] : 0;
-    ok = ok && (n == 16 || n == 32) && nl < 64 && rl >= (uLongf)(11 + nl);
-    int pc = ok ? r[10 + nl] : 0;
-    size_t off = 11 + nl + pc * 3;
-    ok = ok && pc >= 1 && rl == off + (size_t)n * n * n;
+    bool ok = uncompress(r, &rl, data, len) == Z_OK && rl > 11;
+    bool v2 = ok && !memcmp(r, MAGIC2, 8);
+    ok = ok && (v2 || !memcmp(r, MAGIC, 8));
+    size_t at = 8;
+    int n = ok ? r[at++] : 0, m = ok && v2 ? r[at++] : 1, nl = ok ? r[at++] : 0;
+    ok = ok && (n == 16 || n == 32) && m >= 1 && m <= 3 && nl < 64 && rl >= at + nl + 1;
+    int pc = ok ? r[at + nl] : 0;
+    size_t pal = at + nl + 1, off = pal + pc * 3, cells = (size_t)n * n * n * m;
+    ok = ok && pc >= 1 && (v2 ? rl >= off + cells + 4 : rl == off + cells);
+    size_t sides = 0;
+    if (ok && v2) {
+        const guint8 *c4 = r + off + cells;
+        sides = (size_t)c4[0] << 24 | c4[1] << 16 | c4[2] << 8 | c4[3];
+        ok = sides <= cells * 6 && rl == off + cells + 4 + sides * 5;
+    }
     if (ok) {
-        mc_hat_new(h, n);
-        memcpy(h->name, r + 10, nl);
+        mc_hat_new_tall(h, n, n * m);
+        memcpy(h->name, r + at, nl);
         h->name[nl] = 0;
-        const guint8 *p = r + 11 + nl;
-        for (int i = 0; i < n * n * n; i++) {
+        const guint8 *p = r + pal;
+#define PAL(k) (0xFF000000u | p[((k) - 1) * 3] << 16 | p[((k) - 1) * 3 + 1] << 8 | p[((k) - 1) * 3 + 2])
+        for (size_t i = 0; i < cells; i++) {
             int k = r[off + i];
             if (k && k <= pc)
-                h->c[i] = 0xFF000000u | p[(k - 1) * 3] << 16 | p[(k - 1) * 3 + 1] << 8 | p[(k - 1) * 3 + 2];
+                h->c[i] = PAL(k);
         }
+        const guint8 *e = r + off + cells + 4;
+        for (size_t s = 0; s < sides; s++, e += 5) {
+            size_t cell = (size_t)e[0] << 16 | e[1] << 8 | e[2];
+            if (cell < cells && e[3] < 6 && e[4] >= 1 && e[4] <= pc)
+                mc_hat_sides(h)[cell * 6 + e[3]] = PAL(e[4]);
+        }
+#undef PAL
     }
     g_free(r);
     return ok;
@@ -413,18 +496,45 @@ void mc_hat_resize(mc_hat_t *h, int n)
         return;
     mc_hat_t o = {0};
     mc_hat_copy(&o, h);
-    mc_hat_new(h, n);
+    int m = o.h / o.n, hh = n * m;
+    mc_hat_new_tall(h, n, hh);
     g_strlcpy(h->name, o.name, sizeof h->name);
-    for (int y = 0; y < n; y++)
+    for (int y = 0; y < hh; y++)
         for (int z = 0; z < n; z++)
             for (int x = 0; x < n; x++) {
-                guint32 c = 0;
+                int src = -1;
                 if (n > o.n)
-                    c = o.c[((y / 2) * o.n + z / 2) * o.n + x / 2];
+                    src = ((y / 2) * o.n + z / 2) * o.n + x / 2;
                 else
-                    for (int k = 0; k < 8 && !c; k++)
-                        c = o.c[((y * 2 + (k >> 2)) * o.n + z * 2 + (k >> 1 & 1)) * o.n + x * 2 + (k & 1)];
-                h->c[(y * n + z) * n + x] = c;
+                    for (int k = 0; k < 8 && src < 0; k++) {
+                        int j = ((y * 2 + (k >> 2)) * o.n + z * 2 + (k >> 1 & 1)) * o.n + x * 2 + (k & 1);
+                        if (o.c[j])
+                            src = j;
+                    }
+                if (src < 0)
+                    continue;
+                int i = (y * n + z) * n + x;
+                h->c[i] = o.c[src];
+                for (int d = 0; o.f && d < 6; d++)
+                    if (o.f[src * 6 + d])
+                        mc_hat_sides(h)[i * 6 + d] = o.f[src * 6 + d];
             }
+    mc_hat_free(&o);
+}
+
+/* taller or shorter (height in cells: n, 2n or 3n); cells above the new top go */
+void mc_hat_set_height(mc_hat_t *h, int height)
+{
+    height = CLAMP(height, h->n, 3 * h->n);
+    if (height == h->h)
+        return;
+    mc_hat_t o = {0};
+    mc_hat_copy(&o, h);
+    mc_hat_new_tall(h, o.n, height);
+    g_strlcpy(h->name, o.name, sizeof h->name);
+    int keep = o.n * o.n * MIN(o.h, height);
+    memcpy(h->c, o.c, sizeof(guint32) * keep);
+    if (o.f)
+        memcpy(mc_hat_sides(h), o.f, sizeof(guint32) * keep * 6);
     mc_hat_free(&o);
 }

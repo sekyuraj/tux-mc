@@ -130,29 +130,33 @@ static void add_cell_face(scene_t *sc, const box_t *b, v3 tl, v3 tr, v3 bl, cons
 
 static void add_hat(scene_t *sc, const mc3d_t *v, const box_t *head)
 {
-    int n = v->hat_n;
+    int n = v->hat_n, hh = v->hat_h > 0 ? v->hat_h : n;
     double s = 16.0 / n;
-    const uint32_t *c = v->hat;
-#define CELL(x, y, z) ((x) >= 0 && (y) >= 0 && (z) >= 0 && (x) < n && (y) < n && (z) < n && c[((y) * n + (z)) * n + (x)])
-    for (int y = 0; y < n; y++)
+    const uint32_t *c = v->hat, *sd = v->hat_sides;
+#define CELL(x, y, z) ((x) >= 0 && (y) >= 0 && (z) >= 0 && (x) < n && (y) < hh && (z) < n && c[((y) * n + (z)) * n + (x)])
+    for (int y = 0; y < hh; y++)
         for (int z = 0; z < n; z++)
             for (int x = 0; x < n; x++) {
-                const uint32_t *k = &c[(y * n + z) * n + x];
+                int i = (y * n + z) * n + x;
+                const uint32_t *k = &c[i];
                 if (!*k)
                     continue;
+                /* side d's own colour if it has one */
+#define COL(d) (sd && sd[i * 6 + (d)] ? &sd[i * 6 + (d)] : k)
                 double x0 = -8 + x * s, x1 = x0 + s, y0 = 22 + y * s, y1 = y0 + s, z0 = -8 + z * s, z1 = z0 + s;
                 if (!CELL(x, y, z + 1))
-                    add_cell_face(sc, head, (v3){x0, y1, z1}, (v3){x1, y1, z1}, (v3){x0, y0, z1}, k);
+                    add_cell_face(sc, head, (v3){x0, y1, z1}, (v3){x1, y1, z1}, (v3){x0, y0, z1}, COL(0));
                 if (!CELL(x, y, z - 1))
-                    add_cell_face(sc, head, (v3){x1, y1, z0}, (v3){x0, y1, z0}, (v3){x1, y0, z0}, k);
+                    add_cell_face(sc, head, (v3){x1, y1, z0}, (v3){x0, y1, z0}, (v3){x1, y0, z0}, COL(1));
                 if (!CELL(x - 1, y, z))
-                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x0, y1, z1}, (v3){x0, y0, z0}, k);
+                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x0, y1, z1}, (v3){x0, y0, z0}, COL(2));
                 if (!CELL(x + 1, y, z))
-                    add_cell_face(sc, head, (v3){x1, y1, z1}, (v3){x1, y1, z0}, (v3){x1, y0, z1}, k);
+                    add_cell_face(sc, head, (v3){x1, y1, z1}, (v3){x1, y1, z0}, (v3){x1, y0, z1}, COL(3));
                 if (!CELL(x, y + 1, z))
-                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x1, y1, z0}, (v3){x0, y1, z1}, k);
+                    add_cell_face(sc, head, (v3){x0, y1, z0}, (v3){x1, y1, z0}, (v3){x0, y1, z1}, COL(4));
                 if (!CELL(x, y - 1, z))
-                    add_cell_face(sc, head, (v3){x0, y0, z1}, (v3){x1, y0, z1}, (v3){x0, y0, z0}, k);
+                    add_cell_face(sc, head, (v3){x0, y0, z1}, (v3){x1, y0, z1}, (v3){x0, y0, z0}, COL(5));
+#undef COL
             }
 #undef CELL
 }
@@ -391,8 +395,10 @@ void mc3d_draw(mc3d_t *v, cairo_t *cr, int w, int h, const double sh[3])
     sc.yaw = v->yaw;
     sc.pitch = v->pitch;
     bool hat = v->hat && (v->hat_n == 16 || v->hat_n == 32);
-    double scale = fmin(h / (hat ? 54.0 : 47.0), w / 26.0);   /* a hat reaches 6 pixels above the head */
-    double mid = hat ? 0.53 : 0.47;
+    /* a hat reaches 6 pixels above the head, 16 more for each extra grid of height */
+    double extra = hat && v->hat_h > v->hat_n ? 16.0 * (v->hat_h - v->hat_n) / v->hat_n : 0;
+    double scale = fmin(h / (hat ? 54.0 + extra : 47.0), w / 26.0);
+    double mid = hat ? 0.53 + 0.5 * extra / (54.0 + extra) : 0.47;
 
     /* floor shadow, in output pixels */
     sc.s = scale;
