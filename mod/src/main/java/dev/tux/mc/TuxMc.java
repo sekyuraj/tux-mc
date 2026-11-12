@@ -187,6 +187,7 @@ public class TuxMc implements ClientModInitializer {
             Config.hud = !Config.hud;
             Config.save();
         }
+        FarView.tick();
         Hud.tick(mc);
         Capes.tick(mc);
         Emotes.tick(mc);

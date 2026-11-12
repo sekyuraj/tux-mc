@@ -66,6 +66,7 @@ public final class Config {
     public static boolean perfEntities = true;      /* allocation-free off-screen entity test before Sodium's and vanilla's */
     public static boolean perfHud = true;           /* HUD text built once per tick, not every frame */
     public static boolean perfCosmetics = true;     /* cape textures painted off the render thread (no hitch when one appears) */
+    public static int fullDetail = 0;               /* chunks of full detail when Distant Horizons draws the rest; 0 = off */
     public static boolean perfThreads = true;       /* Linux: world gen / LOD / meshing threads get a lower nice than the frame */
     public static boolean perfMemory = true;        /* other players' cape textures freed when they've been gone 5 min */
     public static boolean adaptive = true;          /* when frames are slow, far players' emotes/hats and HUD refreshes ease off */

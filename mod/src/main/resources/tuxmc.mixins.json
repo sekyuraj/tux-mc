@@ -25,7 +25,9 @@
     "PanoramaMixin",
     "FrameMixin",
     "FrustumAccessor",
-    "EntityCullMixin"
+    "EntityCullMixin",
+    "SodiumFarMixin",
+    "DhFarMixin"
   ],
   "injectors": {
     "defaultRequire": 1

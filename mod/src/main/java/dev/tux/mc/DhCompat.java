@@ -24,35 +24,85 @@ public final class DhCompat {
     }
 
     /** connecting somewhere: off on servers, as configured in singleplayer */
-    public static void connecting(Minecraft mc) {
-        if (mc.getSingleplayerServer() != null || Config.dhOnServers)
-            return;
+    /* DH's config values, through the API interface (the classes behind it aren't public) */
+    private static Object call(Object v, String name, Object... args) throws Exception {
+        Class<?> i = Class.forName("com.seibel.distanthorizons.api.interfaces.config.IDhApiConfigValue");
+        return args.length == 0 ? i.getMethod(name).invoke(v) : i.getMethod(name, Object.class).invoke(v, args[0]);
+    }
+
+    /* what renderingEnabled was before we changed it; null = we didn't.
+     * Its setValue also lands in DistantHorizons.toml, so leaving a server
+     * writes this back first: otherwise DH stayed off in the file for good. */
+    private static Boolean before;
+
+    private static void set(boolean on, String why) {
         try {
             Object v = renderingEnabled();
             if (v == null)
                 return;
-            v.getClass().getMethod("setValue", Object.class).invoke(v, Boolean.FALSE);
-            overridden = true;
-            TuxMc.LOG.info("tuxmc: Distant Horizons off on this server (shaders + DH crash the driver here)");
+            Object was = call(v, "getValue");
+            if (before == null)
+                before = Boolean.TRUE.equals(was);
+            call(v, "setValue", on);
+            TuxMc.LOG.info("tuxmc: Distant Horizons {} {}", on ? "on" : "off", why);
         } catch (ClassNotFoundException e) {
             /* no DH */
         } catch (Exception e) {
-            TuxMc.LOG.warn("tuxmc: couldn't switch Distant Horizons off: {}", e.toString());
+            TuxMc.LOG.warn("tuxmc: couldn't switch Distant Horizons {}: {}", on ? "on" : "off", e.toString());
         }
     }
 
-    public static void disconnected() {
-        if (!overridden)
+    /** connecting somewhere: off on servers, as configured in singleplayer */
+    public static void connecting(Minecraft mc) {
+        /* TUXMC_BENCH_DH=0/1: off / on for one benchmark run */
+        String benchDh = System.getenv("TUXMC_BENCH_DH");
+        if ("1".equals(benchDh) || "0".equals(benchDh)) {
+            set("1".equals(benchDh), "for this benchmark");
+            overridden = "0".equals(benchDh);
             return;
+        }
+        if (mc.getSingleplayerServer() != null || Config.dhOnServers)
+            return;
+        set(false, "on this server (shaders + DH crash the driver here)");
+        overridden = before != null;
+    }
+
+    public static void disconnected() {
+        if (before == null)
+            return;
+        boolean was = before;
+        before = null;
         overridden = false;
         try {
             Object v = renderingEnabled();
-            if (v != null)
-                v.getClass().getMethod("clearValue").invoke(v);
+            if (v != null) {
+                call(v, "setValue", was);
+                call(v, "clearValue");
+            }
         } catch (Exception e) {
-            TuxMc.LOG.warn("tuxmc: couldn't switch Distant Horizons back on: {}", e.toString());
+            TuxMc.LOG.warn("tuxmc: couldn't put Distant Horizons back: {}", e.toString());
         }
     }
+
+    /** is DH drawing? (installed, rendering on in its config, not switched off here for a server) */
+    public static boolean drawing() {
+        if (overridden)
+            return false;
+        try {
+            Object v = renderingEnabled();
+            if (v == null)
+                return false;
+            return Boolean.TRUE.equals(call(v, "getValue"));
+        } catch (Throwable e) {
+            if (!drawingWarned) {
+                drawingWarned = true;
+                TuxMc.LOG.warn("tuxmc: can't ask Distant Horizons whether it draws: {}", e.toString());
+            }
+            return false;
+        }
+    }
+
+    private static boolean drawingWarned;
 
     private DhCompat() {}
 }
